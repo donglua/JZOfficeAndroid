@@ -18,8 +18,8 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 final class OfficePackage implements Closeable {
-    static final long MAX_INPUT = 32L * 1024 * 1024;
-    static final long MAX_EXPANDED = 64L * 1024 * 1024;
+    static final long MAX_INPUT = 64L * 1024 * 1024;
+    static final long MAX_EXPANDED = 128L * 1024 * 1024;
     final File file;
     final ZipFile zip;
     private long readBytes, pixels;
@@ -41,7 +41,7 @@ final class OfficePackage implements Closeable {
                 int count;
                 while ((count = input.read(buffer)) != -1) {
                     checkCancelled();
-                    if ((size += count) > MAX_INPUT) throw new IOException("Document exceeds 32 MiB input limit");
+                    if ((size += count) > MAX_INPUT) throw new IOException("Document exceeds 64 MiB input limit");
                     output.write(buffer, 0, count);
                 }
             }
@@ -55,7 +55,7 @@ final class OfficePackage implements Closeable {
                 ZipEntry entry = entries.nextElement();
                 if (++count > 4096 || !names.add(entry.getName())) throw new IOException("Invalid or oversized package");
                 long size = entry.getSize();
-                if (size < 0 || size > MAX_EXPANDED || (expanded += size) > MAX_EXPANDED) throw new IOException("Expanded document exceeds 64 MiB limit");
+                if (size < 0 || size > MAX_EXPANDED || (expanded += size) > MAX_EXPANDED) throw new IOException("Expanded document exceeds 128 MiB limit");
             }
             return new OfficePackage(file, zip);
         } catch (IOException | RuntimeException e) {

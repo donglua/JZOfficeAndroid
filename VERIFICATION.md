@@ -2,13 +2,35 @@
 
 日期：2026-09-17。版本：0.1.0。
 
-项目 `JZOfficeAndroid`，Rust crate `jz-office-core`，Android namespace `cn.jingzhuan.lib.office`。以下先记录本轮排版与页码升级，后续章节保留初版验证结果，不将历史结果视为当前产物证明。
+项目 `JZOfficeAndroid`，Rust crate `jz-office-core`，Android namespace `cn.jingzhuan.lib.office`。以下先记录本轮文件限制调整，后续章节保留排版升级与初版验证结果，不将历史结果视为当前产物证明。
 
-## 排版与页码升级
+## 文件限制调整
+
+Rust core 与 Android URI 暂存层同步将输入文件上限从 32 MiB 提高到 64 MiB，ZIP 声明的解压总量从 64 MiB 提高到 128 MiB。单个 XML、图片、累计读取量、像素和模型数量限制保持不变，没有新增依赖。
+
+| 环节 | 本轮结果 |
+| --- | --- |
+| Rust | `cargo test --workspace --offline --locked`：41 项测试通过；fmt 与 Clippy `-D warnings` 通过 |
+| 精确边界 | 输入恰好 64 MiB、解压总量恰好 128 MiB 可接受；分别超过 1 字节时拒绝 |
+| Android 构建 | viewer Release AAR、测试 APK、demo Debug/Release APK 构建通过 |
+| 包内容 | ARM32 与 ARM64 的 so 分别在 AAR、测试 APK、Release demo APK 中具有相同 SHA-256 |
+| 设备路径 | 小米 API 36，分别指定 `arm64-v8a` 和 `armeabi-v7a` 安装并运行 `-e suite limits`，均输出 `ALL LIMIT CHECKS PASSED` |
+| 接受用例 | 带 48 MiB 不压缩填充、96 MiB 可压缩填充的 DOCX，经 `file://` URI 暂存、JNI 解析和模型解码成功 |
+| 拒绝与清理 | 65 MiB 不压缩填充触发输入限制，129 MiB 可压缩填充触发解压限制；暂存 ZIP 清理检查通过 |
+
+测试 APK 的本地与安装文件 SHA-256 为：
+
+```text
+4321f2aaba122873e4e5e24c33c88b3cc363152d453ef89d68d0a467d2ad402d
+```
+
+本轮双 ARM AAR 为 650,433 B，demo Release APK 为 1,051,831 B。设备用例是在小型样例中添加未被文档引用的 ZIP 填充项，用于验证容器大小边界，不代表大型真实文档的渲染性能或低内存压力测试。本轮未重跑系统文件选择器、布局和手势用例，其历史验证边界见下方。
+
+## 排版与页码升级记录
 
 本轮实现 PPTX 文本框顶端/居中/底端对齐、DOCX 倍数/固定/最小行距和首行/悬挂/左右缩进、PPTX 矩形图片裁剪，以及当前页/总页数/跳页/页码监听接口。Demo 接入上一页/下一页，四个工具栏按钮改用统一的 24dp 矢量资源和禁用状态颜色。没有新增运行时依赖。
 
-| 环节 | 当前结果 |
+| 环节 | 该轮结果 |
 | --- | --- |
 | Rust | `cargo test --workspace --offline --locked`：39 项测试通过；fmt 与 Clippy `-D warnings` 通过 |
 | Android 构建 | viewer Release AAR、测试 APK、demo Debug/Release APK 构建通过；本轮 Gradle 使用 JDK 25 |
@@ -18,13 +40,13 @@
 | 画面 | 1080 x 1600、1800 x 1000 Canvas 截图及实际窗口截图；人工和两轮独立复查未发现异常重叠或裁剪；Demo 矢量图标已安装检查 |
 | Demo 路径 | Debug APK 的私有文件 URI 打开与图标显示已验证；系统选择器及 Release APK 的设备运行仍未验证 |
 
-当前测试 APK 的本地与安装文件 SHA-256 均为：
+该轮测试 APK 的本地与安装文件 SHA-256 均为：
 
 ```text
 068b48bad5b7c7e333754bd18626dec11cfb9f1668a392eb1c788a1fe2ad7b1d
 ```
 
-当前双 ARM AAR 为 650,425 B，demo Release APK 为 1,051,831 B。初版大小见历史表格；本轮未重新测量单 ABI 和空应用增量。
+该轮双 ARM AAR 为 650,425 B，demo Release APK 为 1,051,831 B。初版大小见历史表格；该轮未重新测量单 ABI 和空应用增量。
 
 独立代码审查发现布局前调用 `jumpToPage` 的时序问题，已改为记录目标并在首次有效布局后执行，真机回归通过。缩进测试最初误用表示滚动边界的 `getLineLeft`，已改为文字坐标与实际绘制像素断言；生产缩进实现无需调整。窗口截图增加实际绘制等待和样例背景检查。
 

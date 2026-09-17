@@ -15,8 +15,8 @@ pub struct Package {
 impl Package {
     pub fn new(mut reader: impl Read + Seek + 'static) -> Result<Self> {
         let length = reader.seek(SeekFrom::End(0))?;
-        if length > 32 * 1024 * 1024 {
-            return Err(Error::Limit("Input exceeds 32 MiB"));
+        if length > 64 * 1024 * 1024 {
+            return Err(Error::Limit("Input exceeds 64 MiB"));
         }
         let count = crate::zip_directory::entry_count(&mut reader, length)?;
         reader.seek(SeekFrom::Start(0))?;
@@ -30,8 +30,8 @@ impl Package {
             expanded = expanded
                 .checked_add(entry.size())
                 .ok_or(Error::Limit("Expanded package is too large"))?;
-            if expanded > 64 * 1024 * 1024 {
-                return Err(Error::Limit("Expanded package exceeds 64 MiB"));
+            if expanded > 128 * 1024 * 1024 {
+                return Err(Error::Limit("Expanded package exceeds 128 MiB"));
             }
         }
         Ok(Self {

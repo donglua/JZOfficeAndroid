@@ -20,16 +20,23 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class OfficeInstrumentation extends Instrumentation {
     private PreviewTestActivity activity;
     private final StringBuilder results = new StringBuilder();
-    private boolean layoutOnly;
+    private boolean layoutOnly, limitsOnly;
 
     @Override public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
         layoutOnly = arguments != null && "layout".equals(arguments.getString("suite"));
+        limitsOnly = arguments != null && "limits".equals(arguments.getString("suite"));
         start();
     }
     @Override public void onStart() {
         Bundle output = new Bundle();
         try {
+            if (!layoutOnly) results.append(PackageLimitChecks.run(getTargetContext()));
+            if (limitsOnly) {
+                output.putString("stream", "\n" + results + "ALL LIMIT CHECKS PASSED\n");
+                finish(Activity.RESULT_OK, output);
+                return;
+            }
             ActivityMonitor monitor = addMonitor(PreviewTestActivity.class.getName(), null, false);
             String component = getTargetContext().getPackageName() + "/" + PreviewTestActivity.class.getName();
             try (ParcelFileDescriptor command = getUiAutomation().executeShellCommand("am start -n " + component);
