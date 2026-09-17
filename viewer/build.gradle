@@ -28,6 +28,7 @@ tasks.register('buildNative', Exec) {
     outputs.dir(nativeOutput)
     workingDir rootProject.projectDir
     environment 'ANDROID_NDK_HOME', androidComponents.sdkComponents.ndkDirectory.get().asFile.absolutePath
+    environment 'OFFICE_OFFLINE', gradle.startParameter.offline.toString()
     commandLine(['bash', rootProject.file('scripts/build-native.sh').absolutePath, nativeOutput.get().asFile.absolutePath] + officeAbis)
 }
 tasks.named('preBuild').configure { dependsOn tasks.named('buildNative') }
