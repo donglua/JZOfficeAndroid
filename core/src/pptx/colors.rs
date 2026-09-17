@@ -151,9 +151,33 @@ impl Theme {
 }
 
 fn transforms(value: u32, node: &Node, doc: &mut Document) -> u32 {
-    let mut channels = [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+    let mut channels = [(value >> 16) & 255, (value >> 8) & 255, value & 255].map(f64::from);
     let mut alpha = value >> 24;
+    let mut luminance = None;
     for transform in &node.children {
+        if matches!(transform.name.as_str(), "lumMod" | "lumOff") {
+            let Some(amount) = transform
+                .attr("val")
+                .parse::<f64>()
+                .ok()
+                .filter(|value| value.is_finite())
+                .map(|value| value / 100_000.0)
+            else {
+                doc.warn("Some PPTX luminance transforms are invalid.");
+                continue;
+            };
+            let lightness = luminance.unwrap_or_else(|| {
+                (channels.into_iter().fold(255.0, f64::min)
+                    + channels.into_iter().fold(0.0, f64::max))
+                    / 510.0
+            });
+            luminance = Some(if transform.name == "lumMod" {
+                (lightness * amount).clamp(0.0, 1.0)
+            } else {
+                (lightness + amount).clamp(0.0, 1.0)
+            });
+            continue;
+        }
         let amount = transform
             .attr("val")
             .parse::<u32>()
@@ -163,18 +187,39 @@ fn transforms(value: u32, node: &Node, doc: &mut Document) -> u32 {
             "alpha" => alpha = (255 * amount + 50_000) / 100_000,
             "alphaMod" => alpha = (alpha * amount + 50_000) / 100_000,
             "shade" => {
+                apply_luminance(&mut channels, luminance.take());
                 for channel in &mut channels {
-                    *channel = (*channel * amount + 50_000) / 100_000;
+                    *channel = (*channel * f64::from(amount) / 100_000.0).round();
                 }
             }
             "tint" => {
+                apply_luminance(&mut channels, luminance.take());
                 for channel in &mut channels {
-                    *channel = 255 - ((255 - *channel) * amount + 50_000) / 100_000;
+                    *channel = 255.0 - ((255.0 - *channel) * f64::from(amount) / 100_000.0).round();
                 }
             }
             _ => doc.warn("Some PPTX color transforms are not supported."),
         }
     }
-    let [red, green, blue] = channels;
+    apply_luminance(&mut channels, luminance);
+    let [red, green, blue] = channels.map(|channel| channel.round() as u32);
     (alpha << 24) | (red << 16) | (green << 8) | blue
+}
+
+fn apply_luminance(channels: &mut [f64; 3], lightness: Option<f64>) {
+    let Some(lightness) = lightness else { return };
+    let min = channels.iter().copied().fold(255.0, f64::min) / 255.0;
+    let max = channels.iter().copied().fold(0.0, f64::max) / 255.0;
+    if max == min {
+        *channels = [lightness * 255.0; 3];
+        return;
+    }
+    // Keep the original hue and saturation through successive luminance transforms.
+    let saturation = (max - min) / (1.0 - (max + min - 1.0).abs());
+    let chroma = (1.0 - (2.0 * lightness - 1.0).abs()) * saturation;
+    for channel in channels {
+        *channel = (((*channel / 255.0 - min) / (max - min)) * chroma + lightness - chroma / 2.0)
+            .clamp(0.0, 1.0)
+            * 255.0;
+    }
 }

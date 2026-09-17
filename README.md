@@ -96,6 +96,8 @@ PPTX 组合保留子元素顺序，支持嵌套位置、非等比缩放和旋转
 
 PPTX 文本应用继承后的 `lnSpc`、`marL`、`marR` 和 `indent`。`normAutofit` 使用文件保存的字号比例及百分比行距缩减值，`noAutofit` 和 `spAutoFit` 可清除继承的缩字设置；不根据 Android 字体重新求解自动缩字或扩大文本框。段前/段后百分比间距、自定义制表位和 RTL 仍简化处理。相关语义参见 [DrawingML 组合变换](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.transformgroup)和 [NormalAutoFit](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.normalautofit)。
 
+PPTX 渐变文字采用色带中点的纯色近似，并返回提示；按色标位置插值，保留主题色映射和透明度。颜色支持 `lumMod`、`lumOff` 亮度变换，直接纯色或无填充可覆盖继承的渐变文字样式。未实现真实渐变着色、图形渐变填充或 WordArt 特效，不增加字体或渲染依赖。
+
 PPTX 图表仅支持单个标准 `lineChart`，读取文件内保存的数值缓存或直接数值，支持分类/日期横轴、线性纵轴、显式范围、断点/补零/跨空值连线、基础主题色、标题和图例。不会读取外部 CSV、打开嵌入工作簿或计算公式。坐标刻度与布局近似，图例统一置于底部，曲线使用直线段，省略标记和复杂样式；组合图、堆积图、对数轴和缺失缓存的图表会被省略并返回提示。复用已有线条和文字元素，不新增图表库、字体或 Android 模型协议。
 
 内部 JSON 模型为 `schemaVersion = 4`，新增元素的组合变换和翻转字段，core 与 viewer 应使用同次构建产物；不匹配时解码器会明确报错。
@@ -206,6 +208,8 @@ Android 仅缓存可见区域的图片，离屏时移除缓存引用，返回该
 PPTX 兼容性回归使用 `-e suite pptx`，通过标志为 `ALL PPTX CHECKS PASSED`。样例 `samples/pptx-compat.pptx` 包含嵌套组合、旋转、翻转图片、缩字段落，以及使用 635 倍坐标换算的细描边和文字；检查组合坐标、Canvas 像素、行距与缩进、可见图片缓存，以及缩放和跳页。该入口不会执行完整测试组。
 
 同一入口包含 `samples/pptx-charts.pptx`：两页分类/日期折线图，使用缓存数据并引用不存在的外部 CSV；通过 JNI/管道 URI 加载，检查曲线像素、标题、边界及两种尺寸的截图。该样例仅打入测试 APK。
+
+`samples/pptx-colors.pptx` 包含红底渐变标题及等效纯色参照页。通过管道 URI/JNI 检查主题色与亮度变换结果，并在两种尺寸下检查金色文字像素和错误黑色像素。该样例仅打入测试 APK。
 
 ```sh
 adb shell am instrument -w -e suite pptx cn.jingzhuan.lib.office.test/cn.jingzhuan.lib.office.OfficeInstrumentation

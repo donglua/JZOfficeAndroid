@@ -4,6 +4,36 @@
 
 项目 `JZOfficeAndroid`，Rust crate `jz-office-core`，Android namespace `cn.jingzhuan.lib.office`。以下先记录本轮 PPTX 兼容性改进，后续章节为历史验证结果，不将历史结果视为当前产物证明。
 
+## PPTX 渐变文字颜色
+
+用户提供的 18 页文件封面标题使用 `gradFill`，原先解析器忽略它并保留默认黑色。其中一个色标还使用主题色 `accent4` 的 `lumMod`、`lumOff`，原先也未应用。现支持亮度变换，并将文字渐变按色标位置取中点纯色近似；该标题得到 `FFF3DD`。直接纯色、无填充与继承优先级保持不变。没有新增依赖、字体、Android 生产代码或模型字段。
+
+| 环节 | 本轮证据 |
+| --- | --- |
+| 根因与回归 | 原文件核心输出及旧 Demo 截图均为黑色；修复前三项合成用例失败，修复后通过，等效纯色参照得到相同结果 |
+| Rust | 191 项工作区测试通过，含 5 项颜色回归及样例路径调用；fmt、Clippy `-D warnings` 通过 |
+| 颜色边界 | 色标位置/乱序/无效位置、透明色插值、主题色、连续亮度变换、变换顺序、灰度、范围钳制与直接格式覆盖 |
+| Android 构建 | Release AAR、Debug/Release Demo APK、测试 APK 构建通过；lint 0 错误、1 个原有触摸可访问性警告 |
+| 包内容 | AAR、测试 APK、Debug/Release Demo APK 的 ARM64/ARM32 原生库哈希一致；颜色样例仅在测试 APK；Release APK 通过 16 KiB zipalign 检查 |
+| 设备路径 | 华为 BKY-W00 的 ARM64、强制 ARM32 均输出 `ALL PPTX CHECKS PASSED`，包含此前组合、排版和图表用例 |
+| 颜色与画面 | 两页渐变/纯色参照经管道 URI/JNI 得到同一颜色；1080x1600、1800x1000 Canvas 均有金色文字且无黑色标题像素；已检查四张画面及窗口截图 |
+| 用户文件 | 系统文件选择器选中原文件后，安装新版 Debug Demo，通过已授权 content URI 重开封面；两行标题由黑色恢复为浅金色，原红色底层文字和页脚保留 |
+
+系统截图带有 Display P3 ICC 配置，直接按 sRGB 字节比较会误报；按内嵌配置转换到 sRGB 后，同一标题区域由 227,628 个黑色像素变为 0，新增 223,908 个精确 `FFF3DD` 像素。Canvas 样例本身为 sRGB，原有颜色断言无需调整。
+
+| 双 ARM 产物 | 改动前 | 改动后 | 增量 |
+| --- | ---: | ---: | ---: |
+| Release Demo APK | 1,196,623 B | 1,214,879 B | 18,256 B，约 17.8 KiB |
+| Release AAR | 759,257 B | 761,898 B | 2,641 B，约 2.6 KiB |
+| ARM64 `.so` | 671,600 B | 673,664 B | 2,064 B |
+| ARM32 `.so` | 487,208 B | 489,080 B | 1,872 B |
+
+APK 增量包含原生库的 16 KiB ZIP 对齐开销。AAR SHA-256：`ac2d7b610f9c335bb830bc15f4e401b94c976a35117cf9224372b94e7798cf3f`；Release APK SHA-256：`e1a0f1303d5bb1c6b984b53bd649bc4fc1d2def083684eb0f7a0293336011a6c`。
+
+已安装 Demo 与本机 Debug APK 哈希一致：`584fa53af8243a6fee53aaade1ac5e683e7ae929813593955dfb1d206a75de50`；测试 APK 安装哈希一致：`aa8ca7d592f9f0a114b2aca2cfd175016e10db37f1779f02d276a5e5c1326e95`。测试后恢复 ARM64 安装，并将 Demo 停在原文档封面。
+
+边界：仅验证该文件封面颜色，没有逐页与 Office 对比；渐变仍是带提示的纯色近似，图形渐变、字体精确匹配和 WordArt 特效未实现。ARM32 在支持 32 位进程的 ARM64 设备上验证，未覆盖纯 32 位旧设备。原业务文件未进入仓库或发布包。
+
 ## PPTX 缓存折线图
 
 用户提供文件的第 16 页空白区域是内嵌 `chart3.xml`，包含 587 个缓存数据点，原先所有图表均被跳过。现用 Rust 将标准折线图转换为已有线条、文字和矩形元素，恢复标题、分类/日期轴、曲线与图例。未新增依赖、字体或 Android 生产代码，模型保持 schema 4；不访问外部 CSV，不计算公式。

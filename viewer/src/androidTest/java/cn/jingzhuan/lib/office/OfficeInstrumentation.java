@@ -60,6 +60,7 @@ public final class OfficeInstrumentation extends Instrumentation {
             if (pptxOnly) {
                 results.append(PptxCompatibilityChecks.run(this, activity));
                 results.append(PptxChartChecks.run(this, activity));
+                results.append(PptxColorChecks.run(this, activity));
                 runOnMainSync(() -> activity.finish());
                 output.putString("stream", "\n" + results + "ALL PPTX CHECKS PASSED\n");
                 finish(Activity.RESULT_OK, output);

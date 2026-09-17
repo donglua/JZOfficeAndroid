@@ -8,6 +8,7 @@ mod render;
 mod styles;
 mod table;
 mod text;
+mod text_fill;
 mod text_style;
 mod transform;
 mod unsupported;

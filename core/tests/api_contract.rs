@@ -93,6 +93,7 @@ fn sample_deliverables_match_rust_generator_and_parse_through_path_api() -> Test
         ("sample.pptx", pptx::parts(), "PPTX"),
         ("pptx-compat.pptx", support::pptx_compat::parts(), "PPTX"),
         ("pptx-charts.pptx", support::pptx_charts::parts(), "PPTX"),
+        ("pptx-colors.pptx", support::pptx_colors::parts(), "PPTX"),
         ("sample.xlsx", xlsx::parts(), "XLSX"),
     ] {
         let path = root.join(name);
@@ -120,9 +121,35 @@ fn samples_have_well_formed_xml_content_types_and_resolvable_relationships() -> 
         docx::parts(),
         pptx::parts(),
         support::pptx_charts::parts(),
+        support::pptx_colors::parts(),
         xlsx::parts(),
     ] {
         check_package(&parts)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn pptx_color_fixture_matches_solid_reference_through_path_api() -> TestResult {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../samples/pptx-colors.pptx");
+
+    let document = parse_path(&path)?;
+
+    assert_eq!(document.pages.len(), 2);
+    for page in &document.pages {
+        assert_eq!(page.background, 0xffff0000);
+        assert_eq!(page.elements.len(), 1);
+        let title = &page.elements[0];
+        assert_eq!(
+            [title.x, title.y, title.width, title.height],
+            [100.0, 100.0, 520.0, 140.0]
+        );
+        assert_eq!(title.paragraphs.len(), 1);
+        assert_eq!(title.paragraphs[0].runs.len(), 1);
+        let run = &title.paragraphs[0].runs[0];
+        assert_eq!(run.text, "Gold title");
+        assert_eq!(run.size, 64.0);
+        assert_eq!(run.color, 0xfffff3dd);
     }
     Ok(())
 }

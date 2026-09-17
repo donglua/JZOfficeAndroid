@@ -27,7 +27,7 @@ impl TextStyle<'_> {
                     .warn("PPTX underline styles use single underlines.");
             }
         }
-        run.color = self.theme.fill(properties, run.color, self.doc);
+        run.color = self.theme.text_fill(properties, run.color, self.doc);
         if ["latin", "ea", "cs", "sym"]
             .iter()
             .any(|n| properties.child(n).is_some())
