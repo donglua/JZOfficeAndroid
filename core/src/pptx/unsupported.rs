@@ -2,7 +2,6 @@ use crate::{model::Document, xml::Node};
 
 pub(super) fn warn(node: &Node, doc: &mut Document) {
     match node.name.as_str() {
-        "chart" => doc.warn("PPTX charts are omitted."),
         "relIds" => doc.warn("PPTX SmartArt is omitted."),
         "oMath" | "oMathPara" => doc.warn("PPTX mathematical equations are omitted."),
         "timing" => doc.warn("PPTX animations and timing are not supported."),

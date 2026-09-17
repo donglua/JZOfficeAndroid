@@ -92,6 +92,7 @@ fn sample_deliverables_match_rust_generator_and_parse_through_path_api() -> Test
         ("sample.docx", docx::parts(), "DOCX"),
         ("sample.pptx", pptx::parts(), "PPTX"),
         ("pptx-compat.pptx", support::pptx_compat::parts(), "PPTX"),
+        ("pptx-charts.pptx", support::pptx_charts::parts(), "PPTX"),
         ("sample.xlsx", xlsx::parts(), "XLSX"),
     ] {
         let path = root.join(name);
@@ -115,7 +116,12 @@ fn sample_deliverables_match_rust_generator_and_parse_through_path_api() -> Test
 
 #[test]
 fn samples_have_well_formed_xml_content_types_and_resolvable_relationships() -> TestResult {
-    for parts in [docx::parts(), pptx::parts(), xlsx::parts()] {
+    for parts in [
+        docx::parts(),
+        pptx::parts(),
+        support::pptx_charts::parts(),
+        xlsx::parts(),
+    ] {
         check_package(&parts)?;
     }
     Ok(())

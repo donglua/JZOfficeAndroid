@@ -1,3 +1,5 @@
+mod chart;
+mod chart_data;
 mod colors;
 mod geometry;
 mod inheritance;

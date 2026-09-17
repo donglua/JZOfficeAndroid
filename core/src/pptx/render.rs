@@ -13,7 +13,7 @@ use crate::{Package, Result};
 pub(super) struct Render<'a> {
     pub doc: &'a mut Document,
     pub theme: &'a Theme,
-    pub pkg: &'a Package,
+    pub pkg: &'a mut Package,
     pub budget: &'a mut Budget,
     pub defaults: Option<&'a Node>,
     pub layout: Option<&'a Node>,
@@ -117,7 +117,7 @@ impl Render<'_> {
                     }
                 }
                 "graphicFrame" => {
-                    if let Some(element) = self.graphic(shape, bounds)? {
+                    for element in self.graphic(scope.part, shape, bounds)? {
                         self.emit(page, element, transform)?;
                     }
                 }

@@ -6,22 +6,29 @@ use crate::xml::Node;
 use crate::{Error, Result};
 
 impl Render<'_> {
-    pub fn graphic(&mut self, shape: &Node, bounds: Bounds) -> Result<Option<Element>> {
+    pub fn graphic(
+        &mut self,
+        part: &super::parts::Part,
+        shape: &Node,
+        bounds: Bounds,
+    ) -> Result<Vec<Element>> {
         let data = shape.child("graphic").and_then(|n| n.child("graphicData"));
+        if let Some(chart) = data.and_then(|n| n.child("chart")) {
+            return self.chart(part, chart, bounds);
+        }
         let Some(table) = data.and_then(|n| n.child("tbl")) else {
             match data.map_or("", |n| n.attr("uri")) {
-                uri if uri.contains("chart") => self.doc.warn("PPTX charts are omitted."),
                 uri if uri.contains("diagram") => self.doc.warn("PPTX SmartArt is omitted."),
                 _ => self
                     .doc
                     .warn("Unsupported PPTX graphic frames are omitted."),
             }
-            return Ok(None);
+            return Ok(Vec::new());
         };
         let Some(grid) = table.child("tblGrid") else {
             self.doc
                 .warn("PPTX tables with missing column widths are omitted.");
-            return Ok(None);
+            return Ok(Vec::new());
         };
         let mut element = bounds.element(ElementType::TABLE);
         for column in grid.named("gridCol") {
@@ -71,12 +78,12 @@ impl Render<'_> {
             element.rows.push(cells);
         }
         if element.rows.is_empty() {
-            return Ok(None);
+            return Ok(Vec::new());
         }
         self.doc.warn("PPTX table row heights are approximate.");
         if table.child("tblPr").is_some() {
             self.doc.warn("PPTX table styles are simplified.");
         }
-        Ok(Some(element))
+        Ok(vec![element])
     }
 }

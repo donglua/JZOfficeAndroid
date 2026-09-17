@@ -13,6 +13,7 @@ fn main() -> TestResult {
         ("sample.docx", support::docx::parts()),
         ("sample.pptx", support::pptx::parts()),
         ("pptx-compat.pptx", support::pptx_compat::parts()),
+        ("pptx-charts.pptx", support::pptx_charts::parts()),
         ("sample.xlsx", support::xlsx::parts()),
     ] {
         let path = destination.join(name);

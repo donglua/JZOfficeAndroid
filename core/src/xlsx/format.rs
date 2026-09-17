@@ -23,7 +23,7 @@ pub(super) const fn builtin(id: u32) -> Option<&'static str> {
     })
 }
 
-pub(super) fn display(raw: &str, code: &str, date1904: bool) -> Option<String> {
+pub(crate) fn display(raw: &str, code: &str, date1904: bool) -> Option<String> {
     if code.eq_ignore_ascii_case("General") || code == "@" {
         return Some(raw.to_owned());
     }

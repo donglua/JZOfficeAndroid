@@ -72,6 +72,14 @@ impl Theme {
         self.resolve("tx1").unwrap_or(0xff202124)
     }
 
+    pub fn accent(&self, index: usize) -> u32 {
+        const FALLBACK: [u32; 6] = [
+            0xff4472c4, 0xffed7d31, 0xffa5a5a5, 0xffffc000, 0xff5b9bd5, 0xff70ad47,
+        ];
+        self.resolve(&format!("accent{}", index % 6 + 1))
+            .unwrap_or(FALLBACK[index % 6])
+    }
+
     pub fn color(&self, parent: &Node, fallback: u32, doc: &mut Document) -> u32 {
         for node in &parent.children {
             let value = match node.name.as_str() {

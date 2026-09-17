@@ -7,6 +7,8 @@ mod format;
 mod styles;
 mod worksheet;
 
+pub(crate) use format::display as format_value;
+
 use crate::model::{Document, Kind};
 use crate::xml::Node;
 use crate::{Error, Package, Result};
