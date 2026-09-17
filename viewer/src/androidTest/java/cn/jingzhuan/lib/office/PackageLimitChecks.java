@@ -46,7 +46,7 @@ final class PackageLimitChecks {
             }
             try (OfficePackage pkg = OfficePackage.open(context, Uri.fromFile(file))) {
                 if (expectedError != null) throw new AssertionError("Oversized package accepted: " + paddingMiB);
-                OfficeDocument doc = DocumentDecoder.decode(NativeCore.parse(pkg.file.getAbsolutePath()), pkg);
+                OfficeDocument doc = DocumentDecoder.decode(NativeCore.parse(pkg.file.getAbsolutePath()));
                 if (doc.kind != OfficeDocument.Kind.DOCX || doc.blocks.isEmpty()) throw new AssertionError("Large document content lost");
                 log.append("PASS URI + JNI decode with ").append(paddingMiB).append(" MiB padding; input bytes=").append(file.length()).append('\n');
             } catch (IOException error) {

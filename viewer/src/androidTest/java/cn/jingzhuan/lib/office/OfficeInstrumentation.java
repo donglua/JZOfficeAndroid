@@ -20,18 +20,19 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class OfficeInstrumentation extends Instrumentation {
     private PreviewTestActivity activity;
     private final StringBuilder results = new StringBuilder();
-    private boolean layoutOnly, limitsOnly;
+    private boolean layoutOnly, limitsOnly, imagesOnly;
 
     @Override public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
         layoutOnly = arguments != null && "layout".equals(arguments.getString("suite"));
         limitsOnly = arguments != null && "limits".equals(arguments.getString("suite"));
+        imagesOnly = arguments != null && "images".equals(arguments.getString("suite"));
         start();
     }
     @Override public void onStart() {
         Bundle output = new Bundle();
         try {
-            if (!layoutOnly) results.append(PackageLimitChecks.run(getTargetContext()));
+            if (!layoutOnly && !imagesOnly) results.append(PackageLimitChecks.run(getTargetContext()));
             if (limitsOnly) {
                 output.putString("stream", "\n" + results + "ALL LIMIT CHECKS PASSED\n");
                 finish(Activity.RESULT_OK, output);
@@ -47,6 +48,13 @@ public final class OfficeInstrumentation extends Instrumentation {
             activity = (PreviewTestActivity) waitForMonitorWithTimeout(monitor, 10000);
             removeMonitor(monitor);
             check(activity != null, "Test activity starts");
+            if (!layoutOnly) results.append(ImageMemoryChecks.run(this, activity));
+            if (imagesOnly) {
+                runOnMainSync(() -> activity.finish());
+                output.putString("stream", "\n" + results + "ALL IMAGE CHECKS PASSED\n");
+                finish(Activity.RESULT_OK, output);
+                return;
+            }
             runOnMainChecked(() -> results.append(RenderingChecks.run(getTargetContext())));
             captureLayoutFixtures();
             pageNavigation();
@@ -75,6 +83,7 @@ public final class OfficeInstrumentation extends Instrumentation {
             expectError("missing");
             rapidReplacement();
             runOnMainSync(() -> activity.preview.clear());
+            awaitCacheCleanup();
             File[] cache = getTargetContext().getCacheDir().listFiles((dir, name) -> name.startsWith("jz-office-"));
             check(cache != null && cache.length == 0, "Temporary document files removed");
             runOnMainSync(() -> activity.finish());
@@ -195,6 +204,35 @@ public final class OfficeInstrumentation extends Instrumentation {
         if (failed.get() != null) throw failed.get();
         check(loaded.get() != null && format.equals(loaded.get().format), "Format detected from " + source.getScheme() + " URI: " + format);
         if (format.equals("PPTX")) check(loaded.get().pageCount == 2, "Both slides loaded");
+        awaitImages();
+        if (failed.get() != null) throw failed.get();
+    }
+
+    private void awaitImages() throws Exception {
+        long deadline = SystemClock.uptimeMillis() + 10000;
+        AtomicReference<Boolean> ready = new AtomicReference<>(false);
+        while (SystemClock.uptimeMillis() < deadline) {
+            runOnMainChecked(() -> {
+                activity.preview.draw(new Canvas());
+                java.lang.reflect.Field field = OfficePreviewView.class.getDeclaredField("images");
+                field.setAccessible(true);
+                OfficeImages images = (OfficeImages) field.get(activity.preview);
+                ready.set(images != null && !images.loading && images.bitmaps.keySet().containsAll(images.wanted));
+            });
+            if (ready.get()) return;
+            SystemClock.sleep(20);
+        }
+        throw new AssertionError("Visible images did not finish loading");
+    }
+
+    private void awaitCacheCleanup() throws Exception {
+        long deadline = SystemClock.uptimeMillis() + 10000;
+        while (SystemClock.uptimeMillis() < deadline) {
+            File[] files = getTargetContext().getCacheDir().listFiles((dir, name) -> name.startsWith("jz-office-"));
+            if (files != null && files.length == 0) return;
+            SystemClock.sleep(20);
+        }
+        throw new AssertionError("Temporary documents were not removed");
     }
 
     private void expectError(String name) throws Exception {
@@ -230,6 +268,10 @@ public final class OfficeInstrumentation extends Instrumentation {
             OfficePreviewView view = activity.preview;
             view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY));
             view.layout(0, 0, width, height);
+        });
+        awaitImages();
+        runOnMainSync(() -> {
+            OfficePreviewView view = activity.preview;
             Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
             view.draw(new Canvas(bitmap)); ref.set(bitmap);
         });
@@ -247,6 +289,7 @@ public final class OfficeInstrumentation extends Instrumentation {
     }
 
     private void captureScreen(String name) throws Exception {
+        awaitImages();
         CountDownLatch drawn = new CountDownLatch(1);
         runOnMainSync(() -> {
             OfficePreviewView view = activity.preview;

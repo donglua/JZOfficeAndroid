@@ -46,6 +46,7 @@ public final class OfficePreviewView extends View {
     private Future<?> pending;
     private int generation;
     private OfficeDocument document;
+    private OfficeImages images;
     private final OfficeRenderer renderer = new OfficeRenderer();
     private OnPageChangeListener pageListener;
     private int currentPage, notifiedPage, notifiedCount, pendingJumpPage;
@@ -89,6 +90,7 @@ public final class OfficePreviewView extends View {
         requireMainThread();
         if (uri == null || listener == null) throw new IllegalArgumentException("URI and listener are required");
         cancel();
+        releaseImages();
         document = null; renderer.clear(); currentPage = pendingJumpPage = 0; zoom = 1; offsetX = offsetY = 0;
         contentWidth = contentHeight = 0;
         status = "Loading..."; invalidate();
@@ -96,33 +98,37 @@ public final class OfficePreviewView extends View {
         final Context app = getContext().getApplicationContext();
         if (executor == null) executor = Executors.newSingleThreadExecutor();
         pending = executor.submit(() -> {
+            OfficePackage opened = null;
             try {
-                OfficeDocument loaded;
-                try (OfficePackage pkg = OfficePackage.open(app, uri)) {
-                    loaded = DocumentDecoder.decode(NativeCore.parse(pkg.file.getAbsolutePath()), pkg);
-                }
+                opened = OfficePackage.open(app, uri);
+                OfficeDocument loaded = DocumentDecoder.decode(NativeCore.parse(opened.file.getAbsolutePath()));
                 OfficePackage.checkCancelled();
+                final OfficePackage source = opened;
                 main.post(() -> {
-                    if (token != generation) return;
+                    if (token != generation) { closePackage(source); return; }
+                    images = new OfficeImages(source, this::invalidate, listener);
                     document = loaded; status = ""; renderer.layout(loaded);
                     contentWidth = renderer.width; contentHeight = renderer.height; currentPage = 1;
                     clampOffsets(); invalidate();
                     listener.onLoaded(new Info(loaded));
                     if (token == generation) updateCurrentPage();
                 });
+                opened = null;
             } catch (IOException | RuntimeException | LinkageError failure) {
                 Exception error = failure instanceof Exception ? (Exception) failure : new IOException("Native core is unavailable for this device ABI", failure);
                 main.post(() -> {
                     if (token != generation) return;
                     status = "Unable to open document"; invalidate(); listener.onError(error);
                 });
+            } finally {
+                if (opened != null) closePackage(opened);
             }
         });
         notifyPageChanged();
     }
 
     public void clear() {
-        requireMainThread(); cancel(); document = null; renderer.clear(); currentPage = pendingJumpPage = 0;
+        requireMainThread(); cancel(); releaseImages(); document = null; renderer.clear(); currentPage = pendingJumpPage = 0;
         contentWidth = contentHeight = offsetX = offsetY = 0;
         status = ""; invalidate(); notifyPageChanged();
     }
@@ -195,8 +201,23 @@ public final class OfficePreviewView extends View {
         scroller.forceFinished(true);
     }
 
+    private void releaseImages() {
+        if (images != null) { images.close(); images = null; }
+    }
+
+    private static void closePackage(OfficePackage source) {
+        try { source.close(); }
+        catch (IOException error) { android.util.Log.w("JZOffice", "Unable to close document", error); }
+    }
+
+    @Override protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        if (images != null) { images.resume(); invalidate(); }
+    }
+
     @Override protected void onDetachedFromWindow() {
         cancel();
+        if (images != null) images.suspend();
         if (executor != null) { executor.shutdownNow(); executor = null; }
         super.onDetachedFromWindow();
     }
@@ -253,7 +274,9 @@ public final class OfficePreviewView extends View {
         }
         canvas.save(); canvas.translate(left() - offsetX, top() - offsetY); canvas.scale(scale(), scale());
         float visibleTop = (offsetY - top()) / scale(), visibleBottom = visibleTop + getHeight() / scale();
-        renderer.draw(canvas, visibleTop, visibleBottom);
+        float visibleLeft = (offsetX - left()) / scale();
+        images.request(renderer.visibleImages(visibleLeft, visibleTop, visibleLeft + getWidth() / scale(), visibleBottom));
+        renderer.draw(canvas, visibleTop, visibleBottom, images.bitmaps);
         canvas.restore();
     }
 }

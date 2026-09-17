@@ -2,9 +2,25 @@
 
 日期：2026-09-17。版本：0.1.0。
 
-项目 `JZOfficeAndroid`，Rust crate `jz-office-core`，Android namespace `cn.jingzhuan.lib.office`。以下先记录本轮文件限制调整，后续章节保留排版升级与初版验证结果，不将历史结果视为当前产物证明。
+项目 `JZOfficeAndroid`，Rust crate `jz-office-core`，Android namespace `cn.jingzhuan.lib.office`。以下先记录本轮图片缓存调整，后续章节为历史验证结果，不将历史结果视为当前产物证明。
 
-## 文件限制调整
+## 图片按需解码与释放
+
+文档模型仅保留图片路径。Android 按可见区域异步解码图片，释放离屏缓存引用；当前缓存保留 800 万像素预算，单屏图片较多时进一步采样。换文件和 `clear()` 会清理缓存并异步关闭暂存 ZIP；临时脱离窗口后可重新挂载，宿主销毁时需调用 `clear()`。Demo 已接入销毁清理。
+
+Android 读取预算改为按每个 ZIP 条目实际读取的最大字节数计费，重复翻页和失败重试不会对相同字节重复扣额度。文件、ZIP 解压和单条目上限保持不变。
+
+| 环节 | 本轮结果 |
+| --- | --- |
+| Android 构建 | viewer Release AAR、测试 APK、demo Debug/Release APK 构建通过 |
+| 静态检查 | `:viewer:lintDebug`：0 错误、1 个已有触摸可访问性警告；`git diff --check` 通过 |
+| 独立源码复查 | 发现 API 23 的 `removeIf` 兼容性、失败读取重复扣额度、页外图片误加载问题，均已修正 |
+| 测试代码 | 增加 `-e suite images`，构造 16 张不同的 1000 x 1000 图片，覆盖重复翻页超过 128 MiB 读取、像素绘制、缓存释放、重新挂载及旧回调抑制；测试 APK 已编译 |
+| 设备回归 | 当前 adb 无设备，未执行本轮图片、布局和容器回归；不可沿用前两轮真机通过结果 |
+
+尚未获得截图中的原始 PPTX，未确认该文件的实际显示效果。当前缓存预算不是应用总内存上限；系统绘制引用、解码临时数据和等待回收的旧 Bitmap 会增加瞬时内存。未完成低内存设备压力测试。
+
+## 文件限制调整记录
 
 Rust core 与 Android URI 暂存层同步将输入文件上限从 32 MiB 提高到 64 MiB，ZIP 声明的解压总量从 64 MiB 提高到 128 MiB。单个 XML、图片、累计读取量、像素和模型数量限制保持不变，没有新增依赖。
 

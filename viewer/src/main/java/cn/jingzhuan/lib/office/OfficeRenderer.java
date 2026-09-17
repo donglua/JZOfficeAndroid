@@ -1,11 +1,15 @@
 package cn.jingzhuan.lib.office;
 
 import android.graphics.Canvas;
+import android.graphics.Bitmap;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 final class OfficeRenderer {
     static final class Element {
@@ -55,8 +59,8 @@ final class OfficeRenderer {
         d.width = Math.max(1, flow ? (source.type == OfficeDocument.Type.TABLE && source.width > 0 ? Math.min(source.width, available) : available) : source.width);
         d.height = Math.max(1, source.height);
         if (source.type == OfficeDocument.Type.IMAGE && flow) {
-            float w = source.width > 0 ? source.width : source.image != null ? source.image.getWidth() : available;
-            float h = source.height > 0 ? source.height : source.image != null ? source.image.getHeight() : 100;
+            float w = source.width > 0 ? source.width : available;
+            float h = source.height > 0 ? source.height : 100;
             d.width = Math.min(available, w); d.height = h * d.width / Math.max(1, w);
         } else if (source.type == OfficeDocument.Type.TABLE) {
             int cols = 0;
@@ -94,20 +98,39 @@ final class OfficeRenderer {
         return d;
     }
 
-    void draw(Canvas canvas, float visibleTop, float visibleBottom) {
+    Set<String> visibleImages(float left, float top, float right, float bottom) {
+        Set<String> parts = new LinkedHashSet<>();
+        for (Page page : pages) {
+            if (page.y + page.height < top || page.y > bottom) continue;
+            float clippedLeft = Math.max(0, left), clippedRight = Math.min(page.width, right);
+            float clippedTop = Math.max(page.y, top), clippedBottom = Math.min(page.y + page.height, bottom);
+            if (clippedLeft >= clippedRight || clippedTop >= clippedBottom) continue;
+            for (Element e : page.elements) {
+                if (e.source.image == null) continue;
+                double angle = Math.toRadians(e.source.rotation);
+                float halfWidth = (float) (Math.abs(Math.cos(angle)) * e.width + Math.abs(Math.sin(angle)) * e.height) / 2;
+                float halfHeight = (float) (Math.abs(Math.sin(angle)) * e.width + Math.abs(Math.cos(angle)) * e.height) / 2;
+                float cx = e.x + e.width / 2, cy = page.y + e.y + e.height / 2;
+                if (cx + halfWidth > clippedLeft && cx - halfWidth < clippedRight && cy + halfHeight > clippedTop && cy - halfHeight < clippedBottom) parts.add(e.source.image);
+            }
+        }
+        return parts;
+    }
+
+    void draw(Canvas canvas, float visibleTop, float visibleBottom, Map<String, Bitmap> images) {
         for (Page page : pages) {
             if (page.y + page.height < visibleTop || page.y > visibleBottom) continue;
             canvas.save(); canvas.translate(0, page.y); canvas.clipRect(0, 0, page.width, page.height);
             paint.setStyle(Paint.Style.FILL); paint.setColor(page.background);
             canvas.drawRect(0, 0, page.width, page.height, paint);
             for (Element e : page.elements) {
-                if (e.source.rotation != 0 || (e.y + e.height >= visibleTop - page.y && e.y <= visibleBottom - page.y)) drawElement(canvas, e);
+                if (e.source.rotation != 0 || (e.y + e.height >= visibleTop - page.y && e.y <= visibleBottom - page.y)) drawElement(canvas, e, images);
             }
             canvas.restore();
         }
     }
 
-    private void drawElement(Canvas canvas, Element d) {
+    private void drawElement(Canvas canvas, Element d, Map<String, Bitmap> images) {
         OfficeDocument.Element e = d.source;
         canvas.save(); canvas.translate(d.x, d.y); canvas.rotate(e.rotation, d.width / 2, d.height / 2);
         RectF rect = new RectF(0, 0, d.width, d.height);
@@ -120,7 +143,8 @@ final class OfficeRenderer {
         else if (e.stroke != 0) canvas.drawRect(rect, paint);
         canvas.clipRect(rect); paint.setStyle(Paint.Style.FILL);
         if (e.type == OfficeDocument.Type.IMAGE) {
-            if (e.image != null) {
+            Bitmap bitmap = images.get(e.image);
+            if (bitmap != null) {
                 paint.setColor(0xffffffff);
                 if (e.imageCrop != null) {
                     OfficeDocument.ImageCrop crop = e.imageCrop;
@@ -129,7 +153,7 @@ final class OfficeRenderer {
                     rect.set(-crop.left * fullWidth, -crop.top * fullHeight,
                         (1 - crop.left) * fullWidth, (1 - crop.top) * fullHeight);
                 }
-                canvas.drawBitmap(e.image, null, rect, paint);
+                canvas.drawBitmap(bitmap, null, rect, paint);
             } else { paint.setColor(0xffe0e0e0); canvas.drawRect(rect, paint); }
         }
         if (e.type == OfficeDocument.Type.TABLE) {

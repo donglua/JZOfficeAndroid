@@ -22,8 +22,8 @@ final class OfficePackage implements Closeable {
     static final long MAX_EXPANDED = 128L * 1024 * 1024;
     final File file;
     final ZipFile zip;
-    private long readBytes, pixels;
-    private final Map<String, Bitmap> images = new HashMap<>();
+    private long readBytes;
+    private final Map<String, Long> readSizes = new HashMap<>();
 
     private OfficePackage(File file, ZipFile zip) { this.file = file; this.zip = zip; }
 
@@ -70,12 +70,21 @@ final class OfficePackage implements Closeable {
         ZipEntry entry = zip.getEntry(part);
         if (entry == null) throw new IOException("Missing document part: " + part);
         long limit = part.endsWith(".xml") || part.endsWith(".rels") ? 4L * 1024 * 1024 : 16L * 1024 * 1024;
+        if (entry.getSize() > limit) throw new IOException("Document part or read budget exceeded");
+        Long recorded = readSizes.get(part);
+        long charged = recorded == null ? 0 : recorded;
+        long partBytes = 0;
         try (InputStream input = zip.getInputStream(entry); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
             byte[] buffer = new byte[8192];
             int n;
             while ((n = input.read(buffer)) != -1) {
                 checkCancelled();
-                readBytes += n;
+                partBytes += n;
+                if (partBytes > charged) {
+                    readBytes += partBytes - charged;
+                    charged = partBytes;
+                    readSizes.put(part, charged);
+                }
                 if ((long) output.size() + n > limit || readBytes > 128L * 1024 * 1024) throw new IOException("Document part or read budget exceeded");
                 output.write(buffer, 0, n);
             }
@@ -83,23 +92,34 @@ final class OfficePackage implements Closeable {
         }
     }
 
-    Bitmap image(String part) throws IOException {
+    Bitmap image(String part, long pixelLimit) throws IOException {
         if (part == null) return null;
-        if (images.containsKey(part)) return images.get(part);
         byte[] bytes = read(part);
         BitmapFactory.Options options = new BitmapFactory.Options();
         options.inJustDecodeBounds = true;
         BitmapFactory.decodeByteArray(bytes, 0, bytes.length, options);
-        if (options.outWidth <= 0 || options.outHeight <= 0) { images.put(part, null); return null; }
+        if (options.outWidth <= 0 || options.outHeight <= 0) return null;
         options.inSampleSize = 1;
-        while (options.outWidth / options.inSampleSize > 1600 || options.outHeight / options.inSampleSize > 1600) options.inSampleSize *= 2;
-        long estimated = (long) ((options.outWidth + options.inSampleSize - 1) / options.inSampleSize) * ((options.outHeight + options.inSampleSize - 1) / options.inSampleSize);
-        if (pixels + estimated > 8_000_000) throw new IOException("Decoded images exceed 32 MiB pixel budget");
+        while (sampledPixels(options) > pixelLimit
+                || (options.outWidth + (long) options.inSampleSize - 1) / options.inSampleSize > 1600
+                || (options.outHeight + (long) options.inSampleSize - 1) / options.inSampleSize > 1600) {
+            if (options.inSampleSize >= 1 << 30) throw new IOException("Image dimensions exceed decode limit");
+            options.inSampleSize *= 2;
+        }
         options.inJustDecodeBounds = false;
+        options.inPreferredConfig = Bitmap.Config.ARGB_8888;
+        checkCancelled();
         Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length, options);
-        if (bitmap != null) pixels += (long) bitmap.getWidth() * bitmap.getHeight();
-        images.put(part, bitmap);
+        if (bitmap != null && (long) bitmap.getWidth() * bitmap.getHeight() > pixelLimit) {
+            bitmap.recycle();
+            throw new IOException("Decoded image exceeds its visible-area pixel budget");
+        }
         return bitmap;
+    }
+
+    private static long sampledPixels(BitmapFactory.Options options) {
+        return ((options.outWidth + (long) options.inSampleSize - 1) / options.inSampleSize)
+            * ((options.outHeight + (long) options.inSampleSize - 1) / options.inSampleSize);
     }
 
     static void checkCancelled() throws InterruptedIOException {

@@ -10,4 +10,8 @@ public final class PreviewTestActivity extends Activity {
         preview = new OfficePreviewView(this);
         setContentView(preview);
     }
+    @Override protected void onDestroy() {
+        preview.clear();
+        super.onDestroy();
+    }
 }

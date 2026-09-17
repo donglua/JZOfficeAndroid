@@ -118,5 +118,9 @@ public final class MainActivity extends Activity {
     @Override protected void onSaveInstanceState(Bundle out) {
         super.onSaveInstanceState(out); if (current != null) out.putString("uri", current.toString());
     }
+    @Override protected void onDestroy() {
+        preview.clear();
+        super.onDestroy();
+    }
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
 }

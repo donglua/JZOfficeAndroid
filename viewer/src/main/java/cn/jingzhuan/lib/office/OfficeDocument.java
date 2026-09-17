@@ -1,6 +1,5 @@
 package cn.jingzhuan.lib.office;
 
-import android.graphics.Bitmap;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -32,7 +31,7 @@ final class OfficeDocument {
         float padding = 4;
         int fill = 0x00000000, stroke = 0x00000000;
         float strokeWidth = 1;
-        Bitmap image;
+        String image;
         ImageCrop imageCrop;
         VerticalAlignment verticalAlignment = VerticalAlignment.TOP;
         final List<Paragraph> paragraphs = new ArrayList<>();

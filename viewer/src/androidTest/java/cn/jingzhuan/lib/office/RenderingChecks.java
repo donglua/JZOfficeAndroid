@@ -11,6 +11,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
 final class RenderingChecks {
     private RenderingChecks() { }
@@ -20,15 +22,16 @@ final class RenderingChecks {
         File docx = LayoutFixtures.docx(context.getCacheDir());
         File pptx = LayoutFixtures.pptx(context.getCacheDir());
         try {
-            OfficeDocument doc = decode(context, docx);
-            OfficeDocument deck = decode(context, pptx);
+            Map<String, Bitmap> docImages = new HashMap<>(), deckImages = new HashMap<>();
+            OfficeDocument doc = decode(context, docx, docImages);
+            OfficeDocument deck = decode(context, pptx, deckImages);
             checkDocx(doc, log);
-            checkPptx(deck, log);
+            checkPptx(deck, deckImages, log);
             List<String> screenshots = new ArrayList<>();
-            screenshots.add(capture(context, "layout-docx-1080x1600", doc, 1080, 1600));
-            screenshots.add(capture(context, "layout-docx-1800x1000", doc, 1800, 1000));
-            screenshots.add(capture(context, "layout-pptx-1080x1600", deck, 1080, 1600));
-            screenshots.add(capture(context, "layout-pptx-1800x1000", deck, 1800, 1000));
+            screenshots.add(capture(context, "layout-docx-1080x1600", doc, docImages, 1080, 1600));
+            screenshots.add(capture(context, "layout-docx-1800x1000", doc, docImages, 1800, 1000));
+            screenshots.add(capture(context, "layout-pptx-1080x1600", deck, deckImages, 1080, 1600));
+            screenshots.add(capture(context, "layout-pptx-1800x1000", deck, deckImages, 1800, 1000));
             log.append("SCREENSHOTS ").append(screenshots).append('\n');
             log.append("LAYOUT CHECKS PASSED\n");
             return log.toString();
@@ -38,9 +41,15 @@ final class RenderingChecks {
         }
     }
 
-    private static OfficeDocument decode(Context context, File file) throws Exception {
+    private static OfficeDocument decode(Context context, File file, Map<String, Bitmap> images) throws Exception {
         try (OfficePackage pkg = OfficePackage.open(context, Uri.fromFile(file))) {
-            return DocumentDecoder.decode(NativeCore.parse(pkg.file.getAbsolutePath()), pkg);
+            OfficeDocument doc = DocumentDecoder.decode(NativeCore.parse(pkg.file.getAbsolutePath()));
+            List<OfficeDocument.Element> elements = new ArrayList<>(doc.blocks);
+            for (OfficeDocument.Page page : doc.pages) elements.addAll(page.elements);
+            for (OfficeDocument.Element element : elements) {
+                if (element.image != null && !images.containsKey(element.image)) images.put(element.image, pkg.image(element.image, 8_000_000));
+            }
+            return doc;
         }
     }
 
@@ -125,7 +134,7 @@ final class RenderingChecks {
         return bounds;
     }
 
-    private static void checkPptx(OfficeDocument document, StringBuilder log) {
+    private static void checkPptx(OfficeDocument document, Map<String, Bitmap> decodedImages, StringBuilder log) {
         check(document.kind == OfficeDocument.Kind.PPTX, "PPTX kind");
         check(document.pages.size() == 2, "PPTX slide count");
         List<OfficeDocument.Element> texts = new ArrayList<>();
@@ -153,7 +162,7 @@ final class RenderingChecks {
         check(near(drawnTexts.get(2).texts.get(0).y, drawnTexts.get(2).height - textHeight, 1.5f), "PPTX bottom text layout");
 
         Bitmap bitmap = Bitmap.createBitmap(Math.round(page.width), Math.round(page.height), Bitmap.Config.ARGB_8888);
-        renderer.draw(new Canvas(bitmap), 0, page.height);
+        renderer.draw(new Canvas(bitmap), 0, page.height, decodedImages);
         assertColor(bitmap, 54, 180, Color.RED, "PPTX uncropped red quadrant");
         assertColor(bitmap, 90, 180, Color.GREEN, "PPTX uncropped green quadrant");
         assertColor(bitmap, 54, 216, Color.BLUE, "PPTX uncropped blue quadrant");
@@ -163,7 +172,7 @@ final class RenderingChecks {
         log.append("PASS PPTX anchors, renderer offsets and crop pixels\n");
     }
 
-    private static String capture(Context context, String name, OfficeDocument document, int width, int height) throws Exception {
+    private static String capture(Context context, String name, OfficeDocument document, Map<String, Bitmap> images, int width, int height) throws Exception {
         OfficeRenderer renderer = new OfficeRenderer();
         renderer.layout(document);
         Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
@@ -171,7 +180,7 @@ final class RenderingChecks {
         canvas.drawColor(Color.WHITE);
         float scale = Math.min(width / renderer.width, height / renderer.height);
         canvas.scale(scale, scale);
-        renderer.draw(canvas, 0, renderer.height);
+        renderer.draw(canvas, 0, renderer.height, images);
         File file = new File(context.getFilesDir(), name + ".png");
         try (FileOutputStream output = new FileOutputStream(file)) {
             check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, output), "Saved " + file.getName());
