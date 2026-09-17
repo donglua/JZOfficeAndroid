@@ -11,7 +11,7 @@ final class DocumentDecoder {
     static OfficeDocument decode(String json) throws IOException {
         try {
             JSONObject root = new JSONObject(json);
-            if (root.getInt("schemaVersion") != 3) throw new IOException("Unsupported core model version");
+            if (root.getInt("schemaVersion") != 4) throw new IOException("Unsupported core model version");
             OfficeDocument document = new OfficeDocument();
             document.kind = OfficeDocument.Kind.valueOf(root.getString("kind"));
             document.width = (float) root.getDouble("width");
@@ -136,6 +136,16 @@ final class DocumentDecoder {
         e.x = (float) json.getDouble("x"); e.y = (float) json.getDouble("y");
         e.width = (float) json.getDouble("width"); e.height = (float) json.getDouble("height");
         e.rotation = (float) json.getDouble("rotation"); e.padding = (float) json.getDouble("padding");
+        JSONArray transform = json.getJSONArray("transform");
+        if (transform.length() != 6) throw new JSONException("Expected six affine coefficients");
+        for (int i = 0; i < 6; i++) {
+            double value = transform.getDouble(i);
+            if (Double.isNaN(value) || Double.isInfinite(value) || Math.abs(value) > 100000) {
+                throw new JSONException("Invalid element transform");
+            }
+            e.transform[i] = (float) value;
+        }
+        e.flipH = json.getBoolean("flipH"); e.flipV = json.getBoolean("flipV");
         e.fill = (int) json.getLong("fill"); e.stroke = (int) json.getLong("stroke");
         e.strokeWidth = (float) json.getDouble("strokeWidth");
         e.verticalAlignment = OfficeDocument.VerticalAlignment.valueOf(json.getString("verticalAlignment"));

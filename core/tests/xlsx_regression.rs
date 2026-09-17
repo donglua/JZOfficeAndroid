@@ -26,10 +26,10 @@ fn cell(json: &Value, row: u32, column: u32) -> &Value {
 }
 
 #[test]
-fn workbook_uses_relationships_in_sheet_order_and_schema_three() -> TestResult {
+fn workbook_uses_relationships_in_sheet_order_and_current_schema() -> TestResult {
     let json = parse(&xlsx::parts())?;
     assert_eq!(json["kind"], "XLSX");
-    assert_eq!(json["schemaVersion"], 3);
+    assert_eq!(json["schemaVersion"], 4);
     assert_eq!(json["sheets"][0]["name"], "Overview");
     assert_eq!(json["sheets"][1]["name"], "Data");
     assert_eq!(json["pages"], serde_json::json!([]));

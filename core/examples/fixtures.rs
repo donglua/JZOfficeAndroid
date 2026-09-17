@@ -12,6 +12,7 @@ fn main() -> TestResult {
     for (name, parts) in [
         ("sample.docx", support::docx::parts()),
         ("sample.pptx", support::pptx::parts()),
+        ("pptx-compat.pptx", support::pptx_compat::parts()),
         ("sample.xlsx", support::xlsx::parts()),
     ] {
         let path = destination.join(name);

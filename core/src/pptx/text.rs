@@ -1,6 +1,6 @@
 use super::colors::Theme;
 use super::inheritance::{level_defaults, text_style};
-use super::text_style::TextStyle;
+use super::text_style::{apply_autofit, TextStyle};
 use super::Budget;
 use crate::model::{Document, Paragraph, Run};
 use crate::xml::Node;
@@ -137,6 +137,7 @@ impl Text<'_> {
             }
             output.push(result);
         }
+        apply_autofit(&mut output, body, self.chain);
         Ok(output)
     }
 }

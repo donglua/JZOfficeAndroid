@@ -37,7 +37,7 @@ final class SheetRenderingChecks {
     }
 
     private static void checkDecoder() throws Exception {
-        String json = "{\"schemaVersion\":3,\"kind\":\"XLSX\",\"width\":595,\"warnings\":[],\"blocks\":[],\"pages\":[],"
+        String json = "{\"schemaVersion\":4,\"kind\":\"XLSX\",\"width\":595,\"warnings\":[],\"blocks\":[],\"pages\":[],"
             + "\"cellStyles\":[{\"fontSize\":13,\"bold\":true,\"italic\":true,\"underline\":true,\"color\":4279385946,"
             + "\"fill\":4294967295,\"alignment\":3,\"verticalAlignment\":\"BOTTOM\",\"wrap\":true,"
             + "\"borders\":[4278190335,null,4278190335,null]}],"
@@ -70,7 +70,7 @@ final class SheetRenderingChecks {
         invalid.getJSONArray("sheets").getJSONObject(0).getJSONArray("cells")
             .put(invalid.getJSONArray("sheets").getJSONObject(0).getJSONArray("cells").getJSONObject(0));
         reject(invalid, "Duplicate coordinate");
-        invalid = new JSONObject(json).put("schemaVersion", 4);
+        invalid = new JSONObject(json).put("schemaVersion", 3);
         reject(invalid, "Unsupported schema");
         invalid = new JSONObject(json).put("sheets", new org.json.JSONArray());
         reject(invalid, "XLSX without sheets");

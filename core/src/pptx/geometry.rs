@@ -1,4 +1,5 @@
 use super::flag;
+use super::transform::Transform;
 use crate::model::{Document, Element, ElementType, VerticalAlignment};
 use crate::xml::{number, Node};
 
@@ -19,11 +20,14 @@ pub(super) struct Bounds {
     width: f32,
     height: f32,
     rotation: f32,
+    flip_h: bool,
+    flip_v: bool,
 }
 
 impl Bounds {
-    pub fn parse(chain: &[&Node], doc: &mut Document) -> Option<Self> {
+    pub fn parse(chain: &[&Node]) -> Option<Self> {
         let (mut offset, mut extent, mut rotation) = (None, None, 0.0);
+        let (mut flip_h, mut flip_v) = (false, false);
         for shape in chain {
             let transform = match shape.name.as_str() {
                 "graphicFrame" => shape.child("xfrm"),
@@ -37,9 +41,8 @@ impl Bounds {
                 extent = Some((points(ext.attr("cx"))?, points(ext.attr("cy"))?));
             }
             rotation = (number(transform.attr("rot"), 0.0) / 60000.0) % 360.0;
-            if flag(transform.attr("flipH"), false) || flag(transform.attr("flipV"), false) {
-                doc.warn("PPTX shape flips are not supported.");
-            }
+            flip_h = flag(transform.attr("flipH"), false);
+            flip_v = flag(transform.attr("flipV"), false);
         }
         let (x, y) = offset?;
         let (width, height) = extent?;
@@ -56,6 +59,8 @@ impl Bounds {
             width,
             height,
             rotation,
+            flip_h,
+            flip_v,
         })
     }
 
@@ -67,8 +72,49 @@ impl Bounds {
             width: self.width,
             height: self.height,
             rotation: self.rotation,
+            flip_h: self.flip_h,
+            flip_v: self.flip_v,
             ..Element::default()
         }
+    }
+
+    pub fn in_slide_units(self, transform: Transform) -> Option<(Self, Transform)> {
+        if transform.0 == Transform::IDENTITY.0 {
+            return Some((self, transform));
+        }
+        let [a, b, c, d, tx, ty] = transform.0;
+        let (sin, cos) = self.rotation.to_radians().sin_cos();
+        let (a, b, c, d) = (
+            a * cos + c * sin,
+            b * cos + d * sin,
+            c * cos - a * sin,
+            d * cos - b * sin,
+        );
+        let (sx, sy) = (a.hypot(b), c.hypot(d));
+        if sx <= 0.0 || sy <= 0.0 {
+            return None;
+        }
+        let [ga, gb, gc, gd, _, _] = transform.0;
+        let (cx, cy) = (self.x + self.width / 2.0, self.y + self.height / 2.0);
+        let x = ga * cx + gc * cy + tx - (a * self.width + c * self.height) / 2.0;
+        let y = gb * cx + gd * cy + ty - (b * self.width + d * self.height) / 2.0;
+        let (width, height) = (self.width * sx, self.height * sy);
+        if [x, y, width, height]
+            .iter()
+            .any(|v| !v.is_finite() || v.abs() > MAX_POINT)
+        {
+            return None;
+        }
+        // Group coordinates scale geometry; fonts, margins and line widths are already points.
+        let bounds = Self {
+            x: 0.0,
+            y: 0.0,
+            width,
+            height,
+            rotation: 0.0,
+            ..self
+        };
+        Some((bounds, Transform([a / sx, b / sx, c / sy, d / sy, x, y])))
     }
 
     pub fn text_element(self, chain: &[&Node], doc: &mut Document) -> Option<Element> {
@@ -99,11 +145,11 @@ impl Bounds {
             if !matches!(body.attr("numCol"), "" | "1") || body.attr("wrap") == "none" {
                 doc.warn("PPTX text uses one wrapped column.");
             }
-            if ["normAutofit", "spAutoFit", "prstTxWarp"]
+            if ["spAutoFit", "prstTxWarp"]
                 .iter()
                 .any(|name| body.child(name).is_some())
             {
-                doc.warn("PPTX text autofit and WordArt are not supported.");
+                doc.warn("PPTX shape-to-text autofit and WordArt are not supported.");
             }
         }
         left = left.min(self.width);
@@ -132,6 +178,8 @@ impl Bounds {
             height,
             padding: 0.0,
             vertical_alignment,
+            flip_h: false,
+            flip_v: false,
             ..self.element(ElementType::TEXT)
         })
     }

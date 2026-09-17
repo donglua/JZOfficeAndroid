@@ -4,6 +4,7 @@ use super::inheritance;
 use super::parts::Part;
 use super::styles::Styles;
 use super::text::Text;
+use super::transform::{self, Transform};
 use super::{flag, relation_id, Budget};
 use crate::model::{Document, Element, ElementType, ImageCrop, Page, Paragraph};
 use crate::xml::Node;
@@ -17,6 +18,13 @@ pub(super) struct Render<'a> {
     pub defaults: Option<&'a Node>,
     pub layout: Option<&'a Node>,
     pub master: Option<&'a Node>,
+}
+
+#[derive(Clone, Copy)]
+struct ShapeTree<'a> {
+    part: &'a Part,
+    inherited: bool,
+    transform: Transform,
 }
 
 impl Render<'_> {
@@ -37,12 +45,24 @@ impl Render<'_> {
     }
 
     pub fn tree(&mut self, part: &Part, inherited: bool, page: &mut Page) -> Result<()> {
-        unsupported(&part.root, self.doc);
+        super::unsupported::warn(&part.root, self.doc);
         let Some(tree) = inheritance::tree(&part.root) else {
             return Ok(());
         };
+        self.shapes(
+            tree,
+            ShapeTree {
+                part,
+                inherited,
+                transform: Transform::IDENTITY,
+            },
+            page,
+        )
+    }
+
+    fn shapes(&mut self, tree: &Node, scope: ShapeTree<'_>, page: &mut Page) -> Result<()> {
         for shape in &tree.children {
-            if inherited && inheritance::placeholder(shape).is_some() {
+            if scope.inherited && inheritance::placeholder(shape).is_some() {
                 continue;
             }
             let hidden = shape
@@ -55,32 +75,50 @@ impl Render<'_> {
                 continue;
             }
             match shape.name.as_str() {
-                "nvGrpSpPr" | "grpSpPr" | "extLst" | "grpSp" => continue,
+                "nvGrpSpPr" | "grpSpPr" | "extLst" => continue,
+                "grpSp" => {
+                    self.budget.object()?;
+                    if let Some(transform) = scope.transform.group(shape) {
+                        if transform::flipped(shape) {
+                            self.doc.warn("PPTX group flips are not supported.");
+                        }
+                        self.shapes(shape, ShapeTree { transform, ..scope }, page)?;
+                    } else {
+                        self.doc
+                            .warn("PPTX groups with invalid or excessive transforms were omitted.");
+                    }
+                    continue;
+                }
                 "sp" | "cxnSp" | "pic" | "graphicFrame" => (),
                 _ => {
                     self.doc.warn("Unsupported PPTX shape content was omitted.");
                     continue;
                 }
             }
-            let chain = if inherited {
+            let chain = if scope.inherited {
                 vec![shape]
             } else {
                 inheritance::chain(shape, self.layout, self.master)
             };
-            let Some(bounds) = Bounds::parse(&chain, self.doc) else {
+            let Some(bounds) = Bounds::parse(&chain) else {
                 self.doc
                     .warn("PPTX shapes with missing or invalid absolute bounds were omitted.");
                 continue;
             };
+            let Some((bounds, transform)) = bounds.in_slide_units(scope.transform) else {
+                self.doc
+                    .warn("PPTX elements with excessive transformed bounds were omitted.");
+                continue;
+            };
             match shape.name.as_str() {
                 "pic" => {
-                    if let Some(element) = self.picture(part, shape, bounds) {
-                        self.emit(page, element)?;
+                    if let Some(element) = self.picture(scope.part, shape, bounds) {
+                        self.emit(page, element, transform)?;
                     }
                 }
                 "graphicFrame" => {
                     if let Some(element) = self.graphic(shape, bounds)? {
-                        self.emit(page, element)?;
+                        self.emit(page, element, transform)?;
                     }
                 }
                 _ => {
@@ -95,13 +133,13 @@ impl Render<'_> {
                             || element.stroke != 0
                             || shape.child("txBody").is_none())
                     {
-                        self.emit(page, element)?;
+                        self.emit(page, element, transform)?;
                     }
                     if let Some(body) = shape.child("txBody") {
                         if let Some(mut text) = bounds.text_element(&chain, self.doc) {
                             text.paragraphs = self.paragraphs(body, &chain)?;
                             if !text.paragraphs.is_empty() {
-                                self.emit(page, text)?;
+                                self.emit(page, text, transform)?;
                             }
                         } else {
                             self.doc
@@ -159,8 +197,14 @@ impl Render<'_> {
         .read(body)
     }
 
-    fn emit(&mut self, page: &mut Page, element: Element) -> Result<()> {
+    fn emit(&mut self, page: &mut Page, mut element: Element, transform: Transform) -> Result<()> {
         self.budget.object()?;
+        if !transform.accepts(&element) {
+            self.doc
+                .warn("PPTX elements with excessive transformed bounds were omitted.");
+            return Ok(());
+        }
+        element.transform = transform.0;
         page.elements.push(element);
         Ok(())
     }
@@ -215,28 +259,4 @@ fn parse_crop_percent(value: &str) -> Option<f32> {
         value.parse::<f32>().ok()? / 100_000.0
     };
     parsed.is_finite().then_some(parsed)
-}
-
-fn unsupported(node: &Node, doc: &mut Document) {
-    match node.name.as_str() {
-        "grpSp" => doc.warn("PPTX grouped shapes are omitted."),
-        "chart" => doc.warn("PPTX charts are omitted."),
-        "relIds" => doc.warn("PPTX SmartArt is omitted."),
-        "oMath" | "oMathPara" => doc.warn("PPTX mathematical equations are omitted."),
-        "timing" => doc.warn("PPTX animations and timing are not supported."),
-        "transition" => doc.warn("PPTX transitions are not supported."),
-        "AlternateContent" => doc.warn("PPTX alternate content is omitted."),
-        "audioFile" | "videoFile" | "media" | "oleObj" => {
-            doc.warn("PPTX multimedia and embedded objects are not supported.")
-        }
-        "effectLst" | "effectDag" | "scene3d" | "sp3d" => {
-            if !node.children.is_empty() {
-                doc.warn("PPTX shape effects and 3D styling are not supported.");
-            }
-        }
-        _ => (),
-    }
-    for child in &node.children {
-        unsupported(child, doc);
-    }
 }

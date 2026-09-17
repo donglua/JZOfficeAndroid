@@ -61,7 +61,7 @@ pub struct Document {
 impl Document {
     pub fn new(kind: Kind) -> Self {
         Self {
-            schema_version: 3,
+            schema_version: 4,
             kind,
             width: 595.0,
             pages: Vec::new(),
@@ -97,6 +97,9 @@ pub struct Element {
     pub width: f32,
     pub height: f32,
     pub rotation: f32,
+    pub transform: [f32; 6],
+    pub flip_h: bool,
+    pub flip_v: bool,
     pub padding: f32,
     pub fill: u32,
     pub stroke: u32,
@@ -118,6 +121,9 @@ impl Default for Element {
             width: 0.0,
             height: 0.0,
             rotation: 0.0,
+            transform: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+            flip_h: false,
+            flip_v: false,
             padding: 4.0,
             fill: 0,
             stroke: 0,

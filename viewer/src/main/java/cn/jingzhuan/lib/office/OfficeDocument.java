@@ -30,6 +30,8 @@ final class OfficeDocument {
     static final class Element {
         Type type = Type.TEXT;
         float x, y, width, height, rotation;
+        float[] transform = {1, 0, 0, 1, 0, 0};
+        boolean flipH, flipV;
         float padding = 4;
         int fill = 0x00000000, stroke = 0x00000000;
         float strokeWidth = 1;

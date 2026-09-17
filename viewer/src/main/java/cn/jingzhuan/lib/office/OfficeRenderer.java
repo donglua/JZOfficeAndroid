@@ -3,6 +3,7 @@ package cn.jingzhuan.lib.office;
 import android.graphics.Canvas;
 import android.graphics.Bitmap;
 import android.graphics.Paint;
+import android.graphics.Matrix;
 import android.graphics.RectF;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -17,6 +18,8 @@ final class OfficeRenderer {
         final List<OfficeTextLayout.Block> texts = new ArrayList<>();
         final List<RectF> cells = new ArrayList<>();
         float x, y, width, height;
+        final Matrix transform = new Matrix();
+        final RectF bounds = new RectF();
     }
 
     static final class Page {
@@ -40,6 +43,7 @@ final class OfficeRenderer {
                 Element drawn = element(source, width - 64, true, document);
                 drawn.x = 32; drawn.y = y;
                 if (source.type == OfficeDocument.Type.IMAGE) drawn.x += (width - 64 - drawn.width) / 2;
+                position(drawn);
                 page.elements.add(drawn); y += drawn.height + 6;
             }
             page.height = Math.max(300, y + 32); pages.add(page); height = page.height;
@@ -56,8 +60,8 @@ final class OfficeRenderer {
 
     private Element element(OfficeDocument.Element source, float available, boolean flow, OfficeDocument document) {
         Element d = new Element(); d.source = source; d.x = source.x; d.y = source.y;
-        d.width = Math.max(1, flow ? (source.type == OfficeDocument.Type.TABLE && source.width > 0 ? Math.min(source.width, available) : available) : source.width);
-        d.height = Math.max(1, source.height);
+        d.width = flow ? Math.max(1, source.type == OfficeDocument.Type.TABLE && source.width > 0 ? Math.min(source.width, available) : available) : source.width;
+        d.height = flow ? Math.max(1, source.height) : source.height;
         if (source.type == OfficeDocument.Type.IMAGE && flow) {
             float w = source.width > 0 ? source.width : available;
             float h = source.height > 0 ? source.height : 100;
@@ -95,7 +99,20 @@ final class OfficeRenderer {
                 for (OfficeTextLayout.Block block : d.texts) block.y += offset;
             }
         }
+        position(d);
         return d;
+    }
+
+    private void position(Element d) {
+        OfficeDocument.Element e = d.source;
+        float[] m = e.transform;
+        d.transform.setValues(new float[] {m[0], m[2], m[4], m[1], m[3], m[5], 0, 0, 1});
+        d.transform.preTranslate(d.x, d.y);
+        d.transform.preRotate(e.rotation, d.width / 2, d.height / 2);
+        d.transform.preScale(e.flipH ? -1 : 1, e.flipV ? -1 : 1, d.width / 2, d.height / 2);
+        float stroke = (e.stroke >>> 24) == 0 ? 0 : Math.max(0, e.strokeWidth) / 2;
+        d.bounds.set(-stroke, -stroke, d.width + stroke, d.height + stroke);
+        d.transform.mapRect(d.bounds);
     }
 
     Set<String> visibleImages(float left, float top, float right, float bottom) {
@@ -107,11 +124,9 @@ final class OfficeRenderer {
             if (clippedLeft >= clippedRight || clippedTop >= clippedBottom) continue;
             for (Element e : page.elements) {
                 if (e.source.image == null) continue;
-                double angle = Math.toRadians(e.source.rotation);
-                float halfWidth = (float) (Math.abs(Math.cos(angle)) * e.width + Math.abs(Math.sin(angle)) * e.height) / 2;
-                float halfHeight = (float) (Math.abs(Math.sin(angle)) * e.width + Math.abs(Math.cos(angle)) * e.height) / 2;
-                float cx = e.x + e.width / 2, cy = page.y + e.y + e.height / 2;
-                if (cx + halfWidth > clippedLeft && cx - halfWidth < clippedRight && cy + halfHeight > clippedTop && cy - halfHeight < clippedBottom) parts.add(e.source.image);
+                RectF bounds = e.bounds;
+                if (bounds.right > clippedLeft && bounds.left < clippedRight
+                    && page.y + bounds.bottom > clippedTop && page.y + bounds.top < clippedBottom) parts.add(e.source.image);
             }
         }
         return parts;
@@ -124,7 +139,7 @@ final class OfficeRenderer {
             paint.setStyle(Paint.Style.FILL); paint.setColor(page.background);
             canvas.drawRect(0, 0, page.width, page.height, paint);
             for (Element e : page.elements) {
-                if (e.source.rotation != 0 || (e.y + e.height >= visibleTop - page.y && e.y <= visibleBottom - page.y)) drawElement(canvas, e, images);
+                if (e.bounds.bottom >= visibleTop - page.y && e.bounds.top <= visibleBottom - page.y) drawElement(canvas, e, images);
             }
             canvas.restore();
         }
@@ -132,7 +147,7 @@ final class OfficeRenderer {
 
     private void drawElement(Canvas canvas, Element d, Map<String, Bitmap> images) {
         OfficeDocument.Element e = d.source;
-        canvas.save(); canvas.translate(d.x, d.y); canvas.rotate(e.rotation, d.width / 2, d.height / 2);
+        canvas.save(); canvas.concat(d.transform);
         RectF rect = new RectF(0, 0, d.width, d.height);
         paint.setStyle(Paint.Style.FILL); paint.setColor(e.fill);
         if (e.type == OfficeDocument.Type.ELLIPSE) canvas.drawOval(rect, paint);

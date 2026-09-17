@@ -20,7 +20,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class OfficeInstrumentation extends Instrumentation {
     private PreviewTestActivity activity;
     private final StringBuilder results = new StringBuilder();
-    private boolean layoutOnly, limitsOnly, imagesOnly, xlsxOnly, demoOnly;
+    private boolean layoutOnly, limitsOnly, imagesOnly, xlsxOnly, demoOnly, pptxOnly;
 
     @Override public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
@@ -29,6 +29,7 @@ public final class OfficeInstrumentation extends Instrumentation {
         imagesOnly = arguments != null && "images".equals(arguments.getString("suite"));
         xlsxOnly = arguments != null && "xlsx".equals(arguments.getString("suite"));
         demoOnly = arguments != null && "demo-xlsx".equals(arguments.getString("suite"));
+        pptxOnly = arguments != null && "pptx".equals(arguments.getString("suite"));
         start();
     }
     @Override public void onStart() {
@@ -40,7 +41,7 @@ public final class OfficeInstrumentation extends Instrumentation {
                 finish(Activity.RESULT_OK, output);
                 return;
             }
-            if (!layoutOnly && !imagesOnly && !xlsxOnly) results.append(PackageLimitChecks.run(getTargetContext()));
+            if (!layoutOnly && !imagesOnly && !xlsxOnly && !pptxOnly) results.append(PackageLimitChecks.run(getTargetContext()));
             if (limitsOnly) {
                 output.putString("stream", "\n" + results + "ALL LIMIT CHECKS PASSED\n");
                 finish(Activity.RESULT_OK, output);
@@ -56,6 +57,13 @@ public final class OfficeInstrumentation extends Instrumentation {
             activity = (PreviewTestActivity) waitForMonitorWithTimeout(monitor, 10000);
             removeMonitor(monitor);
             check(activity != null, "Test activity starts");
+            if (pptxOnly) {
+                results.append(PptxCompatibilityChecks.run(this, activity));
+                runOnMainSync(() -> activity.finish());
+                output.putString("stream", "\n" + results + "ALL PPTX CHECKS PASSED\n");
+                finish(Activity.RESULT_OK, output);
+                return;
+            }
             if (!layoutOnly && !imagesOnly) {
                 runOnMainChecked(() -> results.append(SheetRenderingChecks.run(getTargetContext())));
                 results.append(SpreadsheetChecks.run(this, activity));
@@ -195,9 +203,9 @@ public final class OfficeInstrumentation extends Instrumentation {
         runOnMainSync(() -> activity.preview.requestLayout());
     }
 
-    private interface CheckedRunnable { void run() throws Exception; }
+    interface CheckedRunnable { void run() throws Exception; }
 
-    private void runOnMainChecked(CheckedRunnable operation) throws Exception {
+    void runOnMainChecked(CheckedRunnable operation) throws Exception {
         AtomicReference<Throwable> failure = new AtomicReference<>();
         runOnMainSync(() -> {
             try { operation.run(); } catch (Exception | AssertionError error) { failure.set(error); }
@@ -206,7 +214,7 @@ public final class OfficeInstrumentation extends Instrumentation {
         if (failure.get() instanceof AssertionError) throw (AssertionError) failure.get();
     }
 
-    private void load(String name, String format) throws Exception {
+    void load(String name, String format) throws Exception {
         load(uri(name), format);
     }
 
@@ -306,11 +314,18 @@ public final class OfficeInstrumentation extends Instrumentation {
         bitmap.recycle();
     }
 
-    private void captureScreen(String name) throws Exception {
+    void captureScreen(String name) throws Exception {
         awaitImages();
         CountDownLatch drawn = new CountDownLatch(1);
-        runOnMainSync(() -> {
+        AtomicInteger expectedPaper = new AtomicInteger(0xffffffff);
+        runOnMainChecked(() -> {
             OfficePreviewView view = activity.preview;
+            java.lang.reflect.Field documentField = OfficePreviewView.class.getDeclaredField("document");
+            documentField.setAccessible(true);
+            OfficeDocument document = (OfficeDocument) documentField.get(view);
+            if (document != null && document.kind == OfficeDocument.Kind.PPTX) {
+                expectedPaper.set(document.pages.get(view.getCurrentPage() - 1).background);
+            }
             view.getViewTreeObserver().addOnDrawListener(new android.view.ViewTreeObserver.OnDrawListener() {
                 @Override public void onDraw() {
                     view.post(() -> {
@@ -324,18 +339,26 @@ public final class OfficeInstrumentation extends Instrumentation {
         check(drawn.await(5, TimeUnit.SECONDS), "Window rendered document: " + name);
         waitForIdleSync();
         getUiAutomation().waitForIdle(100, 3000);
-        Bitmap bitmap = getUiAutomation().takeScreenshot();
-        check(bitmap != null, "Window screenshot available: " + name);
+        Bitmap bitmap = null;
         int paper = 0;
-        for (int y = 0; y < bitmap.getHeight(); y += 16) for (int x = 0; x < bitmap.getWidth(); x += 16) {
-            int pixel = bitmap.getPixel(x, y);
-            if (pixel == 0xffffffff || pixel == 0xffe8f3ff || pixel == 0xff112233 || pixel == 0xfff4f7fa) paper++;
-        }
-        check(paper > 100, "Window contains document paper: " + name);
+        long deadline = SystemClock.uptimeMillis() + 3000;
+        do {
+            if (bitmap != null) bitmap.recycle();
+            bitmap = getUiAutomation().takeScreenshot();
+            check(bitmap != null, "Window screenshot available: " + name);
+            paper = 0;
+            for (int y = 0; y < bitmap.getHeight(); y += 16) for (int x = 0; x < bitmap.getWidth(); x += 16) {
+                int pixel = bitmap.getPixel(x, y);
+                if (pixel == expectedPaper.get()) paper++;
+            }
+            if (paper > 100) break;
+            SystemClock.sleep(50);
+        } while (SystemClock.uptimeMillis() < deadline);
         try (FileOutputStream output = new FileOutputStream(new File(getTargetContext().getFilesDir(), name + ".png"))) {
             check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, output), "Window capture saved: " + name);
         }
         bitmap.recycle();
+        check(paper > 100, "Window contains document paper: " + name);
     }
 
     private void doubleTap() {

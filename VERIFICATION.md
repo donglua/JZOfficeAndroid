@@ -2,7 +2,32 @@
 
 日期：2026-09-17。版本：0.1.0。
 
-项目 `JZOfficeAndroid`，Rust crate `jz-office-core`，Android namespace `cn.jingzhuan.lib.office`。以下先记录本轮 XLSX 支持，后续章节为历史验证结果，不将历史结果视为当前产物证明。
+项目 `JZOfficeAndroid`，Rust crate `jz-office-core`，Android namespace `cn.jingzhuan.lib.office`。以下先记录本轮 PPTX 兼容性改进，后续章节为历史验证结果，不将历史结果视为当前产物证明。
+
+## PPTX 组合与文本排版
+
+组合节点原先被整体跳过，图片翻转只产生警告；PPTX 行距、左右和悬挂缩进、文件保存的自动缩字值也未完整应用。本轮补充嵌套组合的位置、非等比缩放和旋转，图片/基础图形局部翻转，百分比/固定行距、右缩进/首行缩进，以及 `normAutofit` 的字号比例和百分比行距缩减。没有新增依赖。
+
+绘制与可见图片判断使用相同的最终变换，保留原有按需解码和离屏释放。独立源码复查发现小于 1pt 的元素会被原有尺寸下限扩大，现仅 DOCX 流式布局保留该下限，PPTX 使用原始尺寸；同时修正透明描边扩大图片可见范围的问题，相关设备断言已补充。修正后的源码复查没有剩余阻塞项。内部模型升级为 schema 4，core 与 viewer 必须同步更新。
+
+真实文件回放发现，组合内 Logo 的 1pt 描边被 635 倍坐标换算放大，遮住正文；同组标题也因在换算前扣除 point 内边距而消失。现先把每个子元素的尺寸换算到页面单位，再计算文字布局；残余矩阵保留旋转和剪切，字体、内边距、线宽不随坐标单位放大。此修复未增加依赖或按文件名分支。
+
+| 环节 | 本轮证据 |
+| --- | --- |
+| Rust | 174 项工作区测试通过；fmt 和 Clippy `-D warnings` 通过 |
+| 新增回归 | 13 项组合/翻转测试、12 项文本测试；包含 635 倍坐标单位、描边/字体/内边距、叶节点旋转、不同层级变换顺序、45 度旋转、隐藏组顺序、缺失/过大坐标、5000 对象预算、样式覆盖与异常行距 |
+| 实际核心调用 | `parse_path` 打开两页兼容样例和 31 页业务文件；业务文件 Logo 还原为 110x29pt、1pt 描边，原先省略的组合标题恢复 |
+| Android 构建 | Release AAR、Debug/Release Demo APK 与测试 APK 构建通过；lint 为 0 错误、1 个原有触摸可访问性警告 |
+| 包内容 | AAR、测试 APK 和 Debug/Release Demo APK 均包含相同哈希的 ARM32/ARM64 原生库；样例与测试 APK 内资产哈希一致；Release APK 的 16 KiB zipalign 检查通过 |
+| Android 设备用例 | 华为 BKY-W00 上 ARM64 与强制 ARM32 的 `-e suite pptx` 均输出 `ALL PPTX CHECKS PASSED`，包含真实 JNI/URI、像素/基线断言、变换后图片可见性、缩放/跳页和截图 |
+| 既有布局回归 | `-e suite layout` 输出 `ALL LAYOUT CHECKS PASSED`；截图等待窗口淡入完成，按当前页实际背景色断言，修正旧用例遗漏第二页背景色的误报；保留失败截图便于定位 |
+| 真实文件回放 | 通过原有 content URI 打开用户提供的 55,019,791 B 文件；检查第 28-30 页，正文遮挡消失、Logo 恢复正常尺寸、组合标题可见；用户确认效果 |
+
+本轮双 ARM AAR 为 732,338 B；Release Demo APK 为 1,162,807 B。AAR SHA-256：`e20c9e2dd1b286aaaf1ae4e153dad51210631cca839ffbc00dfac271cf1f9ea5`。
+
+已安装 Demo APK 与本机 Debug APK 的 SHA-256 均为 `537e04d3cb01cb095dfe682c210ce7f611a24773b4307df7d278ec5aca8bb156`。原始业务文件仅用于本地验证，仓库只保留不含业务内容的合成回归样例。
+
+仍未支持组合整体翻转、复杂几何、SmartArt、图表、WordArt、独立竖排文字、字体精确匹配和表格精确行高。自动缩字仅采用文件保存值，不重新求解 Office 排版。没有与 Office 逐页对比全部 31 页，不能据此声明完整兼容；任意剪切组合的描边仍属近似。
 
 ## XLSX 有限预览
 

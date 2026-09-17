@@ -7,6 +7,8 @@ mod styles;
 mod table;
 mod text;
 mod text_style;
+mod transform;
+mod unsupported;
 
 use crate::model::{Document, Kind, Page};
 use crate::xml::Node;

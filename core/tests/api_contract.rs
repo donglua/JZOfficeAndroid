@@ -54,8 +54,8 @@ fn output_schema_version_and_serialized_field_names_are_stable() -> TestResult {
 
         let json = serde_json::to_value(&document)?;
 
-        assert_eq!(document.schema_version, 3);
-        assert_eq!(json["schemaVersion"], 3);
+        assert_eq!(document.schema_version, 4);
+        assert_eq!(json["schemaVersion"], 4);
         assert!(json.get("schema_version").is_none());
         assert!(json["warnings"].is_array());
         assert_eq!(json["sheets"], serde_json::json!([]));
@@ -67,6 +67,12 @@ fn output_schema_version_and_serialized_field_names_are_stable() -> TestResult {
         };
         assert_eq!(element["type"], "TEXT");
         assert!(element["strokeWidth"].is_number());
+        assert_eq!(
+            element["transform"],
+            serde_json::json!([1.0, 0.0, 0.0, 1.0, 0.0, 0.0])
+        );
+        assert_eq!(element["flipH"], false);
+        assert_eq!(element["flipV"], false);
         assert!(element["columnWidths"].is_array());
         assert_eq!(element["verticalAlignment"], "TOP");
         assert!(element["imageCrop"].is_null());
@@ -85,6 +91,7 @@ fn sample_deliverables_match_rust_generator_and_parse_through_path_api() -> Test
     for (name, parts, expected) in [
         ("sample.docx", docx::parts(), "DOCX"),
         ("sample.pptx", pptx::parts(), "PPTX"),
+        ("pptx-compat.pptx", support::pptx_compat::parts(), "PPTX"),
         ("sample.xlsx", xlsx::parts(), "XLSX"),
     ] {
         let path = root.join(name);

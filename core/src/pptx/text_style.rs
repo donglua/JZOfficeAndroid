@@ -1,7 +1,7 @@
 use super::colors::Theme;
 use super::flag;
 use super::geometry::points;
-use crate::model::{Document, Paragraph, Run};
+use crate::model::{Document, LineSpacingRule, Paragraph, Run};
 use crate::xml::{number, Node};
 
 pub(super) struct TextStyle<'a> {
@@ -64,16 +64,32 @@ impl TextStyle<'_> {
         if let Some(indent) = points(properties.attr("marL")) {
             paragraph.indent = indent.max(0.0);
         }
+        if let Some(indent) = points(properties.attr("marR")) {
+            paragraph.right_indent = indent.max(0.0);
+        }
+        if let Some(indent) = points(properties.attr("indent")) {
+            paragraph.first_line_indent = indent;
+        }
+        if let Some(spacing) = properties.child("lnSpc") {
+            if let Some(value) = spacing
+                .child("spcPct")
+                .and_then(|n| percentage(n.attr("val")))
+            {
+                paragraph.line_spacing_rule = LineSpacingRule::Auto;
+                paragraph.line_spacing = value.clamp(0.1, 10.0);
+            } else if let Some(value) = spacing
+                .child("spcPts")
+                .and_then(|n| n.attr("val").parse::<f32>().ok())
+                .filter(|v| v.is_finite() && *v >= 0.0)
+            {
+                paragraph.line_spacing_rule = LineSpacingRule::Exact;
+                paragraph.line_spacing = (value / 100.0).min(10_000.0);
+            }
+        }
         paragraph.before = self.spacing(properties.child("spcBef"), paragraph.before);
         paragraph.after = self.spacing(properties.child("spcAft"), paragraph.after);
-        if properties.child("lnSpc").is_some()
-            || properties.child("tabLst").is_some()
-            || number(properties.attr("indent"), 0.0) != 0.0
-            || flag(properties.attr("rtl"), false)
-        {
-            self.doc.warn(
-                "PPTX custom line spacing, tabs, hanging indents, and RTL layout are simplified.",
-            );
+        if properties.child("tabLst").is_some() || flag(properties.attr("rtl"), false) {
+            self.doc.warn("PPTX tabs and RTL layout are simplified.");
         }
     }
 
@@ -88,4 +104,48 @@ impl TextStyle<'_> {
         }
         fallback
     }
+}
+
+pub(super) fn apply_autofit(paragraphs: &mut [Paragraph], body: &Node, chain: &[&Node]) {
+    let choice = std::iter::once(body)
+        .chain(chain.iter().rev().filter_map(|shape| shape.child("txBody")))
+        .filter_map(|body| body.child("bodyPr"))
+        .find_map(|properties| {
+            properties.children.iter().find(|child| {
+                matches!(
+                    child.name.as_str(),
+                    "normAutofit" | "noAutofit" | "spAutoFit"
+                )
+            })
+        });
+    // A nearer choice replaces the entire inherited autofit configuration.
+    let Some(settings) = choice.filter(|node| node.name == "normAutofit") else {
+        return;
+    };
+    let scale = percentage(settings.attr("fontScale"))
+        .filter(|v| (0.01..=1.0).contains(v))
+        .unwrap_or(1.0);
+    let reduction = percentage(settings.attr("lnSpcReduction"))
+        .filter(|v| *v <= 1.0)
+        .unwrap_or(0.0);
+    for paragraph in paragraphs {
+        for run in &mut paragraph.runs {
+            run.size = (run.size * scale).max(1.0);
+        }
+        match paragraph.line_spacing_rule {
+            LineSpacingRule::Auto => {
+                paragraph.line_spacing = (paragraph.line_spacing - reduction).max(0.1);
+            }
+            LineSpacingRule::Exact | LineSpacingRule::AtLeast => (),
+        }
+    }
+}
+
+fn percentage(value: &str) -> Option<f32> {
+    let value = value.trim();
+    let ratio = match value.strip_suffix('%') {
+        Some(percent) => percent.trim().parse::<f32>().ok()? / 100.0,
+        None => value.parse::<f32>().ok()? / 100_000.0,
+    };
+    (ratio.is_finite() && ratio >= 0.0).then_some(ratio)
 }
