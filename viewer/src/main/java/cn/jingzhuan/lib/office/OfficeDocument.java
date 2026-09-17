@@ -5,7 +5,7 @@ import java.util.List;
 
 /** Internal display model. Coordinates and font sizes are in points. */
 final class OfficeDocument {
-    enum Kind { DOCX, PPTX }
+    enum Kind { DOCX, PPTX, XLSX }
     enum Type { TEXT, IMAGE, RECT, ELLIPSE, LINE, TABLE }
     enum VerticalAlignment { TOP, CENTER, BOTTOM }
     enum LineSpacingRule { AUTO, EXACT, AT_LEAST }
@@ -13,6 +13,8 @@ final class OfficeDocument {
     float width = 595;
     final List<Page> pages = new ArrayList<>();
     final List<Element> blocks = new ArrayList<>();
+    final List<SpreadsheetDocument.Sheet> sheets = new ArrayList<>();
+    final List<SpreadsheetDocument.CellStyle> cellStyles = new ArrayList<>();
     final List<String> warnings = new ArrayList<>();
 
     void warn(String message) {

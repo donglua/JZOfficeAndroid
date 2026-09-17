@@ -20,19 +20,27 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class OfficeInstrumentation extends Instrumentation {
     private PreviewTestActivity activity;
     private final StringBuilder results = new StringBuilder();
-    private boolean layoutOnly, limitsOnly, imagesOnly;
+    private boolean layoutOnly, limitsOnly, imagesOnly, xlsxOnly, demoOnly;
 
     @Override public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
         layoutOnly = arguments != null && "layout".equals(arguments.getString("suite"));
         limitsOnly = arguments != null && "limits".equals(arguments.getString("suite"));
         imagesOnly = arguments != null && "images".equals(arguments.getString("suite"));
+        xlsxOnly = arguments != null && "xlsx".equals(arguments.getString("suite"));
+        demoOnly = arguments != null && "demo-xlsx".equals(arguments.getString("suite"));
         start();
     }
     @Override public void onStart() {
         Bundle output = new Bundle();
         try {
-            if (!layoutOnly && !imagesOnly) results.append(PackageLimitChecks.run(getTargetContext()));
+            if (demoOnly) {
+                results.append(DemoSpreadsheetChecks.run(this));
+                output.putString("stream", "\n" + results + "ALL DEMO XLSX CHECKS PASSED\n");
+                finish(Activity.RESULT_OK, output);
+                return;
+            }
+            if (!layoutOnly && !imagesOnly && !xlsxOnly) results.append(PackageLimitChecks.run(getTargetContext()));
             if (limitsOnly) {
                 output.putString("stream", "\n" + results + "ALL LIMIT CHECKS PASSED\n");
                 finish(Activity.RESULT_OK, output);
@@ -48,6 +56,16 @@ public final class OfficeInstrumentation extends Instrumentation {
             activity = (PreviewTestActivity) waitForMonitorWithTimeout(monitor, 10000);
             removeMonitor(monitor);
             check(activity != null, "Test activity starts");
+            if (!layoutOnly && !imagesOnly) {
+                runOnMainChecked(() -> results.append(SheetRenderingChecks.run(getTargetContext())));
+                results.append(SpreadsheetChecks.run(this, activity));
+            }
+            if (xlsxOnly) {
+                runOnMainSync(() -> activity.finish());
+                output.putString("stream", "\n" + results + "ALL XLSX CHECKS PASSED\n");
+                finish(Activity.RESULT_OK, output);
+                return;
+            }
             if (!layoutOnly) results.append(ImageMemoryChecks.run(this, activity));
             if (imagesOnly) {
                 runOnMainSync(() -> activity.finish());

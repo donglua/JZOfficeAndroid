@@ -1,9 +1,11 @@
+pub use crate::spreadsheet::{Cell, CellRange, CellStyle, Sheet};
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
 pub enum Kind {
     DOCX,
     PPTX,
+    XLSX,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
@@ -52,17 +54,21 @@ pub struct Document {
     pub pages: Vec<Page>,
     pub blocks: Vec<Element>,
     pub warnings: Vec<String>,
+    pub sheets: Vec<Sheet>,
+    pub cell_styles: Vec<CellStyle>,
 }
 
 impl Document {
     pub fn new(kind: Kind) -> Self {
         Self {
-            schema_version: 2,
+            schema_version: 3,
             kind,
             width: 595.0,
             pages: Vec::new(),
             blocks: Vec::new(),
             warnings: Vec::new(),
+            sheets: Vec::new(),
+            cell_styles: Vec::new(),
         }
     }
 

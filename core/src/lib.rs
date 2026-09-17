@@ -2,6 +2,8 @@ mod docx;
 pub mod model;
 mod package;
 mod pptx;
+pub mod spreadsheet;
+mod xlsx;
 mod xml;
 mod zip_directory;
 
@@ -37,11 +39,14 @@ pub fn parse_reader(reader: impl Read + Seek + 'static) -> Result<model::Documen
     let mut package = Package::new(reader)?;
     let part = package
         .related_by_type("", "officeDocument")?
-        .ok_or(Error::Invalid("Only DOCX and PPTX packages are supported"))?;
+        .ok_or(Error::Invalid(
+            "Only DOCX, PPTX and XLSX packages are supported",
+        ))?;
     let root = package.xml(&part)?;
     match root.name.as_str() {
         "document" => docx::parse(&mut package, &part),
         "presentation" => pptx::parse(&mut package, &part),
-        _ => Err(Error::Invalid("Only DOCX and PPTX are supported")),
+        "workbook" => xlsx::parse(&mut package, &part),
+        _ => Err(Error::Invalid("Only DOCX, PPTX and XLSX are supported")),
     }
 }

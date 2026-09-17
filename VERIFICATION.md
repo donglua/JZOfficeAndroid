@@ -2,7 +2,48 @@
 
 日期：2026-09-17。版本：0.1.0。
 
-项目 `JZOfficeAndroid`，Rust crate `jz-office-core`，Android namespace `cn.jingzhuan.lib.office`。以下先记录本轮图片缓存调整，后续章节为历史验证结果，不将历史结果视为当前产物证明。
+项目 `JZOfficeAndroid`，Rust crate `jz-office-core`，Android namespace `cn.jingzhuan.lib.office`。以下先记录本轮 XLSX 支持，后续章节为历史验证结果，不将历史结果视为当前产物证明。
+
+## XLSX 有限预览
+
+新增 Rust 工作簿解析、稀疏单元格模型、样式和常用数字格式；Android 按可见区域绘制网格，提供固定行列标题、双向滚动、缩放与工作表切换。Demo 接入 XLSX MIME 和底部工作表标签。公式只显示缓存值，无缓存时显示公式文本并提示；未加入公式计算、图片、图表和编辑功能。没有新增依赖。
+
+| 环节 | 本轮结果 |
+| --- | --- |
+| Rust | 工作区 149 项测试通过，包括 85 项格式化用例和 23 项 XLSX 容器用例；fmt、Clippy `-D warnings` 通过 |
+| 核心实际调用 | 通过 `parse_path` 打开 `samples/sample.xlsx`，确认两张表及数字、百分比、日期、公式缓存结果；非 ZIP 输入明确失败 |
+| Android 构建 | viewer Release AAR、测试 APK、demo Debug/Release APK 构建通过；`lintDebug` 0 错误、1 个已有触摸可访问性警告 |
+| 包内容 | AAR、Debug/Release Demo APK 与测试 APK 均含 ARM32/ARM64，分别对应相同原生库哈希；Release APK 的 16 KiB zipalign 检查通过 |
+| XLSX 设备路径 | 小米 API 36，分别指定 ARM64 与 ARM32 安装、启动，均输出 `ALL XLSX CHECKS PASSED` |
+| XLSX 断言 | 管道型 `content://`、表名顺序、切表与页码、同表跳转复位、双向拖动实际偏移、缩放、快速换文件、合并锚点离屏、隐藏行列、换行/对齐/裁剪与缓存上限 |
+| 图片及旧格式 | 双 ABI 的排版用例均通过；图片缓存用例也分别通过，但 ARM32 有一次源样例丢失的失败，见下方 |
+| Demo | 华为 API 31：Debug APK `ACTION_VIEW` 打开样例，无障碍点击 Data/Overview 后选中态与 2/2、1/2 页码一致，输出 `ALL DEMO XLSX CHECKS PASSED` |
+| 画面 | 1080 x 1600、1800 x 1000、缩放/滚动/第二张表的 Canvas 截图，以及手机和平板 Demo 窗口截图；已检查网格、表头、合并区域和标签 |
+
+复查修正了三处问题：单元格 `00` 前缀颜色需要按不透明色显示；跳转当前工作表也应停止惯性滚动并回到左上角；拖动断言需要固定视口并检查实际偏移，避免把缩放产生的偏移当成拖动结果。新增颜色与同表跳转回归均通过。内部模型升级到 schema 3，core 与 viewer 必须同步更新。
+
+小米双 ABI XLSX 检查所用测试 APK，本地和安装文件的 SHA-256 相同：
+
+```text
+58866e2db04d2c72d085571b9684db1a86b511fd9d778793a15a34b9b3c24300
+```
+
+之后仅增加 Demo 无障碍检查入口，生产代码未再修改。华为安装的补充测试 APK SHA-256 为 `f54306a9f98c16f158fd1641cbb66daa6329b9f5992007ed937ac981e555c2d1`；Demo Debug APK 为 `a702a223a0e229f2ae748a9b69aed4174433baf9887518e92a79bdcaeed1c3cf`，均与本地一致。交付 AAR 的 SHA-256 为 `834655f94e7bfb473bbb1cd618211208b6d290d98dba2e0134388788dbb64b87`。
+
+| 双 ARM 产物 | 大小 | 相对本轮修改前 |
+| --- | ---: | ---: |
+| viewer Release AAR | 726,066 B，约 709.05 KiB | +70,872 B，约 69.21 KiB |
+| demo Release APK | 1,159,143 B，约 1.11 MiB | +107,312 B，约 104.80 KiB |
+
+本轮没有重新测量单 ABI 或空应用增量。Java、JNI、资源及压缩方式均影响接入大小，不能用 AAR 压缩体积代替宿主 APK 增量。
+
+保留的异常和验证边界：
+
+- ARM32 图片缓存检查一次在快速替换文档时发生 `FileNotFoundException`：测试自己创建的 `cache/image-memory-*.pptx` 已不存在；不修改图片生产代码的重跑通过，删除原因未定位，不记为稳定性问题已修复。
+- 小米上的 adb 坐标点击没有切换 Demo 标签，未确认输入未送达的原因；华为无障碍点击检查通过，不能据此宣称小米系统触摸注入已通过。
+- 设备连接期间发生过中断和切换，只有带明确通过标志的执行计入结果。未重跑完整测试入口、系统文件选择器、双指缩放或长时间压力测试。
+- 仅覆盖构造样例；复杂工作簿、区域化数字格式和真实业务文件的兼容率未验证。ARM32 在支持 32 位应用的 ARM64 设备上测试，API 23 和纯 32 位旧设备仍未运行验证。
+- Release Demo 已构建与检查包内容，但设备运行使用 Debug Demo。生产 XLSX 上限与不支持项见 README。
 
 ## 图片按需解码与释放
 

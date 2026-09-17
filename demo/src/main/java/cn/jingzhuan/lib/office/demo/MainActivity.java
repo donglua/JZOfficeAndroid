@@ -20,6 +20,7 @@ public final class MainActivity extends Activity {
     private OfficePreviewView preview;
     private TextView title, status;
     private ImageButton previous, next;
+    private SheetTabs sheets;
     private OfficePreviewView.Info loadedInfo;
     private Uri current;
 
@@ -40,8 +41,9 @@ public final class MainActivity extends Activity {
         toolbar.addView(previous); toolbar.addView(next);
         root.addView(toolbar);
         status = new TextView(this); status.setTextSize(12); status.setTextColor(0xff58616b); status.setPadding(dp(16), dp(4), dp(16), dp(8));
-        status.setText("DOCX / PPTX"); root.addView(status);
+        status.setText("DOCX / PPTX / XLSX"); root.addView(status);
         preview = new OfficePreviewView(this); root.addView(preview, new LinearLayout.LayoutParams(-1, 0, 1));
+        sheets = new SheetTabs(this); root.addView(sheets, new LinearLayout.LayoutParams(-1, -2));
         preview.setOnPageChangeListener((page, count) -> updatePageState());
         setContentView(root);
         if (saved != null && saved.getString("uri") != null) open(Uri.parse(saved.getString("uri")));
@@ -62,7 +64,8 @@ public final class MainActivity extends Activity {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*");
         intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[] {
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         });
         startActivityForResult(intent, PICK_DOCUMENT);
     }
@@ -80,6 +83,7 @@ public final class MainActivity extends Activity {
 
     private void open(Uri uri) {
         loadedInfo = null; updatePageState();
+        sheets.bind(java.util.Collections.emptyList(), preview);
         current = uri; status.setText("Loading..."); status.setOnClickListener(null);
         title.setText("Document");
         new Thread(() -> {
@@ -92,7 +96,7 @@ public final class MainActivity extends Activity {
         }, "document-name").start();
         preview.open(uri, new OfficePreviewView.Listener() {
             @Override public void onLoaded(OfficePreviewView.Info info) {
-                loadedInfo = info; updatePageState();
+                loadedInfo = info; sheets.bind(info.sheetNames, preview); updatePageState();
                 if (!info.warnings.isEmpty()) status.setOnClickListener(v -> new AlertDialog.Builder(MainActivity.this).setTitle("Preview notices").setMessage(android.text.TextUtils.join("\n\n", info.warnings)).setPositiveButton(android.R.string.ok, null).show());
             }
             @Override public void onError(Exception error) { status.setText(error.getMessage()); }
@@ -105,9 +109,11 @@ public final class MainActivity extends Activity {
         next.setVisibility(slides ? View.VISIBLE : View.GONE);
         if (loadedInfo == null) return;
         int page = preview.getCurrentPage();
+        sheets.select(page);
         previous.setEnabled(page > 1);
         next.setEnabled(page > 0 && page < preview.getPageCount());
-        status.setText(loadedInfo.format + (slides ? "  |  " + page + " / " + preview.getPageCount() : "  |  Continuous")
+        boolean workbook = loadedInfo.format.equals("XLSX");
+        status.setText(loadedInfo.format + (slides || workbook ? "  |  " + page + " / " + preview.getPageCount() : "  |  Continuous")
             + (loadedInfo.warnings.isEmpty() ? "" : "  |  " + loadedInfo.warnings.size() + " notices"));
     }
 

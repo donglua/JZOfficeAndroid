@@ -10,12 +10,16 @@ use std::{
 use support::{
     docx,
     package::{archive, Parts, TestResult},
-    pptx,
+    pptx, xlsx,
 };
 
 #[test]
 fn reader_detects_document_format_from_package_content() -> TestResult {
-    for (parts, expected) in [(docx::parts(), "DOCX"), (pptx::parts(), "PPTX")] {
+    for (parts, expected) in [
+        (docx::parts(), "DOCX"),
+        (pptx::parts(), "PPTX"),
+        (xlsx::parts(), "XLSX"),
+    ] {
         let bytes = archive(&parts)?;
 
         let document = parse_reader(Cursor::new(bytes))?;
@@ -32,6 +36,7 @@ fn path_detection_ignores_wrong_or_missing_filename_extension() -> TestResult {
         (pptx::parts(), "presentation.docx", "PPTX"),
         (docx::parts(), "extensionless", "DOCX"),
         (pptx::parts(), "presentation.bin", "PPTX"),
+        (xlsx::parts(), "workbook.docx", "XLSX"),
     ] {
         let temporary = TemporaryFile::new(name, &archive(&parts)?)?;
 
@@ -49,13 +54,16 @@ fn output_schema_version_and_serialized_field_names_are_stable() -> TestResult {
 
         let json = serde_json::to_value(&document)?;
 
-        assert_eq!(document.schema_version, 2);
-        assert_eq!(json["schemaVersion"], 2);
+        assert_eq!(document.schema_version, 3);
+        assert_eq!(json["schemaVersion"], 3);
         assert!(json.get("schema_version").is_none());
         assert!(json["warnings"].is_array());
+        assert_eq!(json["sheets"], serde_json::json!([]));
+        assert_eq!(json["cellStyles"], serde_json::json!([]));
         let element = match document.kind {
             Kind::DOCX => &json["blocks"][0],
             Kind::PPTX => &json["pages"][0]["elements"][0],
+            Kind::XLSX => panic!("This fixture is a paged document"),
         };
         assert_eq!(element["type"], "TEXT");
         assert!(element["strokeWidth"].is_number());
@@ -77,6 +85,7 @@ fn sample_deliverables_match_rust_generator_and_parse_through_path_api() -> Test
     for (name, parts, expected) in [
         ("sample.docx", docx::parts(), "DOCX"),
         ("sample.pptx", pptx::parts(), "PPTX"),
+        ("sample.xlsx", xlsx::parts(), "XLSX"),
     ] {
         let path = root.join(name);
         assert_eq!(
@@ -91,6 +100,7 @@ fn sample_deliverables_match_rust_generator_and_parse_through_path_api() -> Test
         match document.kind {
             Kind::DOCX => assert!(!document.blocks.is_empty()),
             Kind::PPTX => assert_eq!(document.pages.len(), 2),
+            Kind::XLSX => assert_eq!(document.sheets.len(), 2),
         }
     }
     Ok(())
@@ -98,7 +108,7 @@ fn sample_deliverables_match_rust_generator_and_parse_through_path_api() -> Test
 
 #[test]
 fn samples_have_well_formed_xml_content_types_and_resolvable_relationships() -> TestResult {
-    for parts in [docx::parts(), pptx::parts()] {
+    for parts in [docx::parts(), pptx::parts(), xlsx::parts()] {
         check_package(&parts)?;
     }
     Ok(())

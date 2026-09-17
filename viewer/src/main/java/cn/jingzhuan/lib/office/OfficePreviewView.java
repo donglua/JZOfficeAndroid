@@ -3,6 +3,7 @@ package cn.jingzhuan.lib.office;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.graphics.RectF;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
@@ -34,10 +35,13 @@ public final class OfficePreviewView extends View {
         public final String format;
         public final int pageCount;
         public final List<String> warnings;
+        public final List<String> sheetNames;
         private Info(OfficeDocument document) {
             format = document.kind.name();
-            pageCount = document.kind == OfficeDocument.Kind.PPTX ? document.pages.size() : 1;
+            pageCount = document.kind == OfficeDocument.Kind.XLSX ? document.sheets.size()
+                : document.kind == OfficeDocument.Kind.PPTX ? document.pages.size() : 1;
             warnings = Collections.unmodifiableList(new ArrayList<>(document.warnings));
+            sheetNames = names(document);
         }
     }
 
@@ -48,6 +52,8 @@ public final class OfficePreviewView extends View {
     private OfficeDocument document;
     private OfficeImages images;
     private final OfficeRenderer renderer = new OfficeRenderer();
+    private final SheetRenderer sheetRenderer = new SheetRenderer();
+    private final RectF sheetViewport = new RectF();
     private OnPageChangeListener pageListener;
     private int currentPage, notifiedPage, notifiedCount, pendingJumpPage;
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
@@ -91,7 +97,7 @@ public final class OfficePreviewView extends View {
         if (uri == null || listener == null) throw new IllegalArgumentException("URI and listener are required");
         cancel();
         releaseImages();
-        document = null; renderer.clear(); currentPage = pendingJumpPage = 0; zoom = 1; offsetX = offsetY = 0;
+        document = null; renderer.clear(); sheetRenderer.clear(); currentPage = pendingJumpPage = 0; zoom = 1; offsetX = offsetY = 0;
         contentWidth = contentHeight = 0;
         status = "Loading..."; invalidate();
         final int token = generation;
@@ -106,9 +112,16 @@ public final class OfficePreviewView extends View {
                 final OfficePackage source = opened;
                 main.post(() -> {
                     if (token != generation) { closePackage(source); return; }
-                    images = new OfficeImages(source, this::invalidate, listener);
-                    document = loaded; status = ""; renderer.layout(loaded);
-                    contentWidth = renderer.width; contentHeight = renderer.height; currentPage = 1;
+                    document = loaded; status = ""; currentPage = 1;
+                    if (isSpreadsheet()) {
+                        closePackage(source);
+                        sheetRenderer.setSheet(loaded.sheets.get(0), loaded.cellStyles);
+                        contentWidth = sheetRenderer.width; contentHeight = sheetRenderer.height;
+                    } else {
+                        images = new OfficeImages(source, this::invalidate, listener);
+                        renderer.layout(loaded);
+                        contentWidth = renderer.width; contentHeight = renderer.height;
+                    }
                     clampOffsets(); invalidate();
                     listener.onLoaded(new Info(loaded));
                     if (token == generation) updateCurrentPage();
@@ -128,7 +141,7 @@ public final class OfficePreviewView extends View {
     }
 
     public void clear() {
-        requireMainThread(); cancel(); releaseImages(); document = null; renderer.clear(); currentPage = pendingJumpPage = 0;
+        requireMainThread(); cancel(); releaseImages(); document = null; renderer.clear(); sheetRenderer.clear(); currentPage = pendingJumpPage = 0;
         contentWidth = contentHeight = offsetX = offsetY = 0;
         status = ""; invalidate(); notifyPageChanged();
     }
@@ -139,9 +152,31 @@ public final class OfficePreviewView extends View {
 
     public float getZoom() { return zoom; }
 
-    public int getPageCount() { return renderer.pages.size(); }
+    public int getPageCount() { return isSpreadsheet() ? document.sheets.size() : renderer.pages.size(); }
 
     public int getCurrentPage() { return currentPage; }
+
+    public List<String> getSheetNames() { return document == null ? Collections.emptyList() : names(document); }
+
+    public void selectSheet(int sheetNumber) {
+        requireMainThread();
+        if (!isSpreadsheet() || sheetNumber < 1 || sheetNumber > document.sheets.size()) throw new IllegalArgumentException("Sheet number is outside the loaded workbook");
+        scroller.forceFinished(true);
+        if (sheetNumber != currentPage) {
+            sheetRenderer.setSheet(document.sheets.get(sheetNumber - 1), document.cellStyles);
+            contentWidth = sheetRenderer.width; contentHeight = sheetRenderer.height;
+        }
+        currentPage = sheetNumber; pendingJumpPage = 0; offsetX = offsetY = 0;
+        invalidate(); notifyPageChanged();
+    }
+
+    private boolean isSpreadsheet() { return document != null && document.kind == OfficeDocument.Kind.XLSX; }
+
+    private static List<String> names(OfficeDocument document) {
+        List<String> names = new ArrayList<>();
+        for (SpreadsheetDocument.Sheet sheet : document.sheets) names.add(sheet.name);
+        return Collections.unmodifiableList(names);
+    }
 
     public void setOnPageChangeListener(OnPageChangeListener listener) {
         requireMainThread(); pageListener = listener;
@@ -152,6 +187,7 @@ public final class OfficePreviewView extends View {
     public void jumpToPage(int pageNumber) {
         requireMainThread();
         if (pageNumber < 1 || pageNumber > getPageCount()) throw new IllegalArgumentException("Page number is outside the loaded document");
+        if (isSpreadsheet()) { selectSheet(pageNumber); return; }
         scroller.forceFinished(true);
         currentPage = pageNumber;
         if (getWidth() == 0 || getHeight() == 0) {
@@ -170,6 +206,7 @@ public final class OfficePreviewView extends View {
     }
 
     private void updateCurrentPage() {
+        if (isSpreadsheet()) { notifyPageChanged(); return; }
         if (renderer.pages.isEmpty()) currentPage = 0;
         else if (getWidth() > 0 && getHeight() > 0) {
             float visibleTop = (offsetY - top()) / scale();
@@ -227,11 +264,12 @@ public final class OfficePreviewView extends View {
     }
 
     private float baseScale() {
+        if (isSpreadsheet()) return getResources().getDisplayMetrics().density;
         return contentWidth > 0 ? Math.max(1, getWidth() - 24 * getResources().getDisplayMetrics().density) / contentWidth : 1;
     }
     private float scale() { return baseScale() * zoom; }
-    private float left() { return Math.max(0, (getWidth() - contentWidth * scale()) / 2); }
-    private float top() { return 12 * getResources().getDisplayMetrics().density; }
+    private float left() { return isSpreadsheet() ? 0 : Math.max(0, (getWidth() - contentWidth * scale()) / 2); }
+    private float top() { return isSpreadsheet() ? 0 : 12 * getResources().getDisplayMetrics().density; }
     private int maxX() { return Math.max(0, Math.round(contentWidth * scale() - getWidth())); }
     private int maxY() { return Math.max(0, Math.round(contentHeight * scale() + 2 * top() - getHeight())); }
     private void clampOffsets() { offsetX = Math.max(0, Math.min(maxX(), offsetX)); offsetY = Math.max(0, Math.min(maxY(), offsetY)); }
@@ -241,7 +279,7 @@ public final class OfficePreviewView extends View {
         float oldScale = scale();
         float x = (focusX + offsetX - left()) / oldScale;
         float y = (focusY + offsetY - top()) / oldScale;
-        zoom = Math.max(1, Math.min(4, value));
+        zoom = Math.max(isSpreadsheet() ? 0.5f : 1, Math.min(4, value));
         offsetX = x * scale() - focusX + left();
         offsetY = y * scale() - focusY + top();
         clampOffsets(); updateCurrentPage(); invalidate();
@@ -260,6 +298,7 @@ public final class OfficePreviewView extends View {
         }
     }
     @Override public boolean canScrollVertically(int direction) { return direction < 0 ? offsetY > 0 : offsetY < maxY(); }
+    @Override public boolean canScrollHorizontally(int direction) { return direction < 0 ? offsetX > 0 : offsetX < maxX(); }
     @Override protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         if (!applyPendingJump()) { clampOffsets(); updateCurrentPage(); }
     }
@@ -275,8 +314,13 @@ public final class OfficePreviewView extends View {
         canvas.save(); canvas.translate(left() - offsetX, top() - offsetY); canvas.scale(scale(), scale());
         float visibleTop = (offsetY - top()) / scale(), visibleBottom = visibleTop + getHeight() / scale();
         float visibleLeft = (offsetX - left()) / scale();
-        images.request(renderer.visibleImages(visibleLeft, visibleTop, visibleLeft + getWidth() / scale(), visibleBottom));
-        renderer.draw(canvas, visibleTop, visibleBottom, images.bitmaps);
+        if (isSpreadsheet()) {
+            sheetViewport.set(visibleLeft, visibleTop, visibleLeft + getWidth() / scale(), visibleBottom);
+            sheetRenderer.draw(canvas, sheetViewport);
+        } else {
+            images.request(renderer.visibleImages(visibleLeft, visibleTop, visibleLeft + getWidth() / scale(), visibleBottom));
+            renderer.draw(canvas, visibleTop, visibleBottom, images.bitmaps);
+        }
         canvas.restore();
     }
 }

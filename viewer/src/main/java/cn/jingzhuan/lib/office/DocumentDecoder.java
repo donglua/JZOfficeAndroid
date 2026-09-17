@@ -11,7 +11,7 @@ final class DocumentDecoder {
     static OfficeDocument decode(String json) throws IOException {
         try {
             JSONObject root = new JSONObject(json);
-            if (root.getInt("schemaVersion") != 2) throw new IOException("Unsupported core model version");
+            if (root.getInt("schemaVersion") != 3) throw new IOException("Unsupported core model version");
             OfficeDocument document = new OfficeDocument();
             document.kind = OfficeDocument.Kind.valueOf(root.getString("kind"));
             document.width = (float) root.getDouble("width");
@@ -29,8 +29,105 @@ final class DocumentDecoder {
                 for (int j = 0; j < elements.length(); j++) page.elements.add(element(elements.getJSONObject(j)));
                 document.pages.add(page);
             }
+            JSONArray styles = root.getJSONArray("cellStyles");
+            if (styles.length() > 2048) throw new JSONException("Too many cell styles");
+            for (int i = 0; i < styles.length(); i++) document.cellStyles.add(cellStyle(styles.getJSONObject(i)));
+            JSONArray sheets = root.getJSONArray("sheets");
+            if (sheets.length() > 32) throw new JSONException("Too many sheets");
+            if (document.kind == OfficeDocument.Kind.XLSX && (sheets.length() == 0 || styles.length() == 0)) {
+                throw new JSONException("Spreadsheet requires at least one sheet and cell style");
+            }
+            int cellCount = 0, mergeCount = 0;
+            for (int i = 0; i < sheets.length(); i++) {
+                SpreadsheetDocument.Sheet sheet = sheet(sheets.getJSONObject(i), document.cellStyles.size());
+                cellCount += sheet.cells.size(); mergeCount += sheet.merges.size();
+                if (cellCount > 50000 || mergeCount > 1000) throw new JSONException("Spreadsheet model exceeds limits");
+                document.sheets.add(sheet);
+            }
             return document;
         } catch (JSONException | IllegalArgumentException e) { throw new IOException("Invalid core display model", e); }
+    }
+
+    private static SpreadsheetDocument.CellStyle cellStyle(JSONObject json) throws JSONException {
+        SpreadsheetDocument.CellStyle style = new SpreadsheetDocument.CellStyle();
+        style.fontSize = dimension(json.getDouble("fontSize"));
+        if (style.fontSize == 0) throw new JSONException("Cell font size must be positive");
+        style.bold = json.getBoolean("bold"); style.italic = json.getBoolean("italic");
+        style.underline = json.getBoolean("underline"); style.wrap = json.getBoolean("wrap");
+        style.color = (int) json.getLong("color"); style.fill = (int) json.getLong("fill");
+        style.alignment = index(json, "alignment", 4);
+        style.verticalAlignment = OfficeDocument.VerticalAlignment.valueOf(json.getString("verticalAlignment"));
+        JSONArray borders = json.getJSONArray("borders");
+        if (borders.length() != 4) throw new JSONException("Expected four cell borders");
+        for (int i = 0; i < 4; i++) if (!borders.isNull(i)) style.borders[i] = (int) borders.getLong(i);
+        return style;
+    }
+
+    private static SpreadsheetDocument.Sheet sheet(JSONObject json, int styleCount) throws JSONException {
+        SpreadsheetDocument.Sheet sheet = new SpreadsheetDocument.Sheet();
+        sheet.name = json.getString("name");
+        sheet.rowHeights = dimensions(json.getJSONArray("rowHeights"), 10000);
+        sheet.columnWidths = dimensions(json.getJSONArray("columnWidths"), 256);
+        JSONArray cells = json.getJSONArray("cells");
+        if (cells.length() > 50000) throw new JSONException("Too many cells");
+        int previousRow = -1, previousColumn = -1;
+        for (int i = 0; i < cells.length(); i++) {
+            JSONObject source = cells.getJSONObject(i);
+            SpreadsheetDocument.Cell cell = new SpreadsheetDocument.Cell();
+            cell.row = index(source, "row", sheet.rowHeights.length);
+            cell.column = index(source, "column", sheet.columnWidths.length);
+            if (cell.row < previousRow || (cell.row == previousRow && cell.column <= previousColumn)) {
+                throw new JSONException("Cells must have unique coordinates in row order");
+            }
+            previousRow = cell.row; previousColumn = cell.column;
+            cell.style = index(source, "style", styleCount);
+            cell.text = source.getString("text"); cell.numeric = source.getBoolean("numeric");
+            sheet.cells.add(cell);
+        }
+        JSONArray merges = json.getJSONArray("merges");
+        if (merges.length() > 1000) throw new JSONException("Too many merged cells");
+        for (int i = 0; i < merges.length(); i++) {
+            JSONObject source = merges.getJSONObject(i);
+            SpreadsheetDocument.CellRange range = new SpreadsheetDocument.CellRange();
+            range.startRow = index(source, "startRow", sheet.rowHeights.length);
+            range.endRow = index(source, "endRow", sheet.rowHeights.length);
+            range.startColumn = index(source, "startColumn", sheet.columnWidths.length);
+            range.endColumn = index(source, "endColumn", sheet.columnWidths.length);
+            if (range.endRow < range.startRow || range.endColumn < range.startColumn) {
+                throw new JSONException("Invalid merged cell range");
+            }
+            for (SpreadsheetDocument.CellRange previous : sheet.merges) {
+                if (range.startRow <= previous.endRow && range.endRow >= previous.startRow
+                    && range.startColumn <= previous.endColumn && range.endColumn >= previous.startColumn) {
+                    throw new JSONException("Overlapping merged cell ranges");
+                }
+            }
+            sheet.merges.add(range);
+        }
+        return sheet;
+    }
+
+    private static int index(JSONObject json, String name, int limit) throws JSONException {
+        double value = json.getDouble(name);
+        if (value < 0 || value >= limit || value != Math.floor(value)) throw new JSONException("Invalid " + name);
+        return (int) value;
+    }
+
+    private static float[] dimensions(JSONArray array, int limit) throws JSONException {
+        if (array.length() == 0 || array.length() > limit) throw new JSONException("Invalid sheet dimensions");
+        float[] result = new float[array.length()];
+        double total = 0;
+        for (int i = 0; i < result.length; i++) {
+            result[i] = dimension(array.getDouble(i)); total += result[i];
+        }
+        if (total >= Float.MAX_VALUE) throw new JSONException("Sheet dimensions overflow");
+        return result;
+    }
+
+    private static float dimension(double value) throws JSONException {
+        float result = (float) value;
+        if (result < 0 || Float.isNaN(result) || Float.isInfinite(result)) throw new JSONException("Invalid sheet dimension");
+        return result;
     }
 
     private static OfficeDocument.Element element(JSONObject json) throws JSONException {

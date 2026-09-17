@@ -12,8 +12,13 @@ fn main() -> TestResult {
     for (name, parts) in [
         ("sample.docx", support::docx::parts()),
         ("sample.pptx", support::pptx::parts()),
+        ("sample.xlsx", support::xlsx::parts()),
     ] {
-        fs::write(destination.join(name), archive(&parts)?)?;
+        let path = destination.join(name);
+        let bytes = archive(&parts)?;
+        if fs::read(&path).ok().as_deref() != Some(bytes.as_slice()) {
+            fs::write(path, bytes)?;
+        }
     }
     Ok(())
 }
