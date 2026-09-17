@@ -8,6 +8,8 @@ import java.util.List;
 final class OfficeDocument {
     enum Kind { DOCX, PPTX }
     enum Type { TEXT, IMAGE, RECT, ELLIPSE, LINE, TABLE }
+    enum VerticalAlignment { TOP, CENTER, BOTTOM }
+    enum LineSpacingRule { AUTO, EXACT, AT_LEAST }
     Kind kind;
     float width = 595;
     final List<Page> pages = new ArrayList<>();
@@ -31,15 +33,24 @@ final class OfficeDocument {
         int fill = 0x00000000, stroke = 0x00000000;
         float strokeWidth = 1;
         Bitmap image;
+        ImageCrop imageCrop;
+        VerticalAlignment verticalAlignment = VerticalAlignment.TOP;
         final List<Paragraph> paragraphs = new ArrayList<>();
         final List<List<List<Paragraph>>> rows = new ArrayList<>();
         final List<Float> columnWidths = new ArrayList<>();
+    }
+
+    static final class ImageCrop {
+        float left, top, right, bottom;
     }
 
     static final class Paragraph {
         final List<Run> runs = new ArrayList<>();
         int alignment;
         float before, after = 6, indent;
+        float rightIndent, firstLineIndent;
+        LineSpacingRule lineSpacingRule = LineSpacingRule.AUTO;
+        float lineSpacing = 1;
         String bullet = "";
     }
 

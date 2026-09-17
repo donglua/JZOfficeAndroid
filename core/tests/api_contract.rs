@@ -49,8 +49,8 @@ fn output_schema_version_and_serialized_field_names_are_stable() -> TestResult {
 
         let json = serde_json::to_value(&document)?;
 
-        assert_eq!(document.schema_version, 1);
-        assert_eq!(json["schemaVersion"], 1);
+        assert_eq!(document.schema_version, 2);
+        assert_eq!(json["schemaVersion"], 2);
         assert!(json.get("schema_version").is_none());
         assert!(json["warnings"].is_array());
         let element = match document.kind {
@@ -60,6 +60,11 @@ fn output_schema_version_and_serialized_field_names_are_stable() -> TestResult {
         assert_eq!(element["type"], "TEXT");
         assert!(element["strokeWidth"].is_number());
         assert!(element["columnWidths"].is_array());
+        assert_eq!(element["verticalAlignment"], "TOP");
+        assert!(element["imageCrop"].is_null());
+        assert_eq!(element["paragraphs"][0]["lineSpacingRule"], "AUTO");
+        assert_eq!(element["paragraphs"][0]["lineSpacing"], 1.0);
+        assert_eq!(element["paragraphs"][0]["firstLineIndent"], 0.0);
         assert!(element.get("kind").is_none());
         assert!(element["paragraphs"][0]["runs"][0]["text"].is_string());
     }

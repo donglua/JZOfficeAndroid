@@ -159,18 +159,25 @@ fn inspect(node: &Node, document: &mut Document) {
             Some("Justified paragraphs are left aligned.")
         }
         "spacing"
-            if ["line", "beforeLines", "afterLines"]
+            if ["beforeLines", "afterLines"]
                 .iter()
                 .any(|key| !node.attr(key).is_empty()) =>
         {
-            Some("Line-based spacing uses the viewer's default line spacing.")
+            Some("Line-count paragraph spacing uses the viewer's default spacing.")
         }
         "ind"
-            if ["hanging", "firstLine", "right", "end"]
-                .iter()
-                .any(|key| !node.attr(key).is_empty()) =>
+            if [
+                "leftChars",
+                "rightChars",
+                "startChars",
+                "endChars",
+                "firstLineChars",
+                "hangingChars",
+            ]
+            .iter()
+            .any(|key| !node.attr(key).is_empty()) =>
         {
-            Some("First-line, hanging and right indents are not reproduced exactly.")
+            Some("Character-unit paragraph indents use inherited point indents.")
         }
         "pageBreakBefore" if format::enabled(node.attr("val")) => {
             Some("Paragraph page breaks are ignored in continuous flow.")

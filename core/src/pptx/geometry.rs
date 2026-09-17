@@ -1,5 +1,5 @@
 use super::flag;
-use crate::model::{Document, Element, ElementType};
+use crate::model::{Document, Element, ElementType, VerticalAlignment};
 use crate::xml::{number, Node};
 
 const MAX_POINT: f32 = 100_000.0;
@@ -73,6 +73,7 @@ impl Bounds {
 
     pub fn text_element(self, chain: &[&Node], doc: &mut Document) -> Option<Element> {
         let (mut left, mut right, mut top, mut bottom) = (7.2, 7.2, 3.6, 3.6);
+        let mut vertical_alignment = VerticalAlignment::Top;
         for shape in chain {
             let Some(body) = shape.child("txBody").and_then(|b| b.child("bodyPr")) else {
                 continue;
@@ -81,8 +82,16 @@ impl Bounds {
             right = points(body.attr("rIns")).map_or(right, |v| v.max(0.0));
             top = points(body.attr("tIns")).map_or(top, |v| v.max(0.0));
             bottom = points(body.attr("bIns")).map_or(bottom, |v| v.max(0.0));
-            if !matches!(body.attr("anchor"), "" | "t") {
-                doc.warn("PPTX vertical text alignment uses top alignment.");
+            if body.attrs.contains_key("anchor") {
+                vertical_alignment = match body.attr("anchor") {
+                    "ctr" => VerticalAlignment::Center,
+                    "b" => VerticalAlignment::Bottom,
+                    "t" => VerticalAlignment::Top,
+                    _ => {
+                        doc.warn("PPTX unknown vertical text alignment uses top alignment.");
+                        VerticalAlignment::Top
+                    }
+                };
             }
             if !matches!(body.attr("vert"), "" | "horz") || number(body.attr("rot"), 0.0) != 0.0 {
                 doc.warn("PPTX vertical text and independent text rotation are not supported.");
@@ -122,6 +131,7 @@ impl Bounds {
             width,
             height,
             padding: 0.0,
+            vertical_alignment,
             ..self.element(ElementType::TEXT)
         })
     }

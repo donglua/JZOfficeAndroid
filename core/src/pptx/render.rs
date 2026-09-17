@@ -5,7 +5,7 @@ use super::parts::Part;
 use super::styles::Styles;
 use super::text::Text;
 use super::{flag, relation_id, Budget};
-use crate::model::{Document, Element, ElementType, Page, Paragraph};
+use crate::model::{Document, Element, ElementType, ImageCrop, Page, Paragraph};
 use crate::xml::Node;
 use crate::{Package, Result};
 
@@ -123,11 +123,14 @@ impl Render<'_> {
                 .warn("PPTX linked or missing pictures were omitted.");
             return None;
         };
-        if fill.is_some_and(|n| n.child("srcRect").is_some() || n.child("tile").is_some())
+        let image_crop = fill
+            .and_then(|n| n.child("srcRect"))
+            .and_then(|crop| parse_image_crop(crop, self.doc));
+        if fill.is_some_and(|n| n.child("tile").is_some())
             || blip.is_some_and(|n| !n.children.is_empty())
         {
             self.doc
-                .warn("PPTX picture cropping, tiling, and effects are not supported.");
+                .warn("PPTX picture tiling and effects are not supported.");
         }
         if let Some(properties) = shape.child("spPr") {
             if properties.child("custGeom").is_some()
@@ -140,6 +143,7 @@ impl Render<'_> {
         }
         let mut element = bounds.element(ElementType::IMAGE);
         element.image = Some(path.clone());
+        element.image_crop = image_crop;
         Some(element)
     }
 
@@ -160,6 +164,57 @@ impl Render<'_> {
         page.elements.push(element);
         Ok(())
     }
+}
+
+const MIN_SOURCE_FRACTION: f32 = 0.001;
+
+fn parse_image_crop(crop: &Node, doc: &mut Document) -> Option<ImageCrop> {
+    let Some(image_crop) = crop_values(crop) else {
+        doc.warn("PPTX pictures with invalid crop bounds use the full image.");
+        return None;
+    };
+    let source_width = 1.0 - image_crop.left - image_crop.right;
+    let source_height = 1.0 - image_crop.top - image_crop.bottom;
+    if source_width > MIN_SOURCE_FRACTION && source_height > MIN_SOURCE_FRACTION {
+        Some(image_crop)
+    } else {
+        doc.warn("PPTX pictures with invalid crop bounds use the full image.");
+        None
+    }
+}
+
+fn crop_values(crop: &Node) -> Option<ImageCrop> {
+    Some(ImageCrop {
+        left: crop_percent(crop, "l")?,
+        top: crop_percent(crop, "t")?,
+        right: crop_percent(crop, "r")?,
+        bottom: crop_percent(crop, "b")?,
+    })
+}
+
+fn crop_percent(node: &Node, attr: &str) -> Option<f32> {
+    let Some(raw) = node.attrs.get(attr) else {
+        return Some(0.0);
+    };
+    let value = parse_crop_percent(raw)?;
+    if (0.0..=1.0).contains(&value) {
+        Some(value)
+    } else {
+        None
+    }
+}
+
+fn parse_crop_percent(value: &str) -> Option<f32> {
+    let value = value.trim();
+    if value.is_empty() {
+        return None;
+    }
+    let parsed = if let Some(percent) = value.strip_suffix('%') {
+        percent.trim().parse::<f32>().ok()? / 100.0
+    } else {
+        value.parse::<f32>().ok()? / 100_000.0
+    };
+    parsed.is_finite().then_some(parsed)
 }
 
 fn unsupported(node: &Node, doc: &mut Document) {

@@ -23,8 +23,8 @@
 
 | 格式 | 基础能力 | 简化或省略 |
 | --- | --- | --- |
-| DOCX | 段落、基础样式继承、字号与颜色、粗斜体和下划线、图片、矩形表格 | 连续滚动；图片独占内容块；编号简化；忽略精确分页、浮动环绕、页眉页脚和公式 |
-| PPTX | 按演示顺序显示幻灯片、固定坐标文字、图片、矩形、椭圆、直线、简单表格、基础主题色与占位符继承 | 忽略动画、组合图形、图表、SmartArt、复杂形状、图片裁剪、自动缩字；表格行高近似 |
+| DOCX | 段落、基础样式继承、字号与颜色、粗斜体和下划线、倍数/固定/最小行距、首行/悬挂/左右缩进、图片、矩形表格 | 连续滚动；图片独占内容块；编号简化；忽略精确分页、浮动环绕、页眉页脚和公式 |
+| PPTX | 按演示顺序显示幻灯片、固定坐标文字、文本框顶端/居中/底端对齐、矩形图片裁剪、矩形、椭圆、直线、简单表格、基础主题色与占位符继承 | 忽略动画、组合图形、图表、SmartArt、复杂形状、自动缩字；表格行高近似 |
 
 字体使用系统默认字体，可能改变换行。识别到的未支持内容通过 `Info.warnings` 返回；它不是完整兼容性扫描。DOCX 的 `pageCount` 为 1，表示连续内容，不表示原文件页数。
 
@@ -60,6 +60,24 @@ preview.open(uri, object : OfficePreviewView.Listener {
 `open`、`clear`、`setZoom` 和 `resetZoom` 在主线程调用，回调也在主线程。文件读取和 Rust 解析在工作线程执行。重复 `open` 会取消旧任务并抑制旧回调；View 脱离窗口时取消加载并关闭执行器。取消正在阻塞的文件提供方读取属于尽力而为，已有文档可以在重新挂载 View 后继续显示。
 
 支持拖动滚动、双指缩放、双击缩放和 `resetZoom()`。`clear()` 释放当前文档引用。
+
+页码从 1 开始；未加载、加载中、失败或 `clear()` 后，当前页和总页数均为 0。DOCX 为一个连续页面，不表示 Word 的实际页数。PPTX 当前页按视口内可见高度最多的幻灯片计算；可见高度相同时保留当前页。跳转保留缩放，重置横向偏移，并把目标页尽量移到视口顶端。
+
+```kotlin
+preview.setOnPageChangeListener { pageNumber, pageCount ->
+    pageLabel.text = "$pageNumber / $pageCount"
+}
+// Can be called after onLoaded; if the view has no size yet, the jump is applied on first layout:
+preview.jumpToPage(2)
+val currentPage = preview.currentPage
+val pageCount = preview.pageCount
+```
+
+`setOnPageChangeListener` 和 `jumpToPage` 在主线程调用，页码读取也应在主线程。监听器注册时立即收到当前状态，之后仅在当前页或总页数变化时回调；传入 `null` 可移除监听器。越界跳转抛出 `IllegalArgumentException`；文档已加载但 View 尚无尺寸时，合法跳转会记录目标页并在首次获得非零尺寸时应用。Demo 的上一页/下一页按钮使用同一接口。
+
+DOCX 行距与缩进沿用默认样式、父样式和直接格式的继承顺序，缩进支持 point 换算的数值；字符单位缩进、网格排版、RTL 和按行单位的段前/段后间距仍为简化预览。PPTX 裁剪支持 `srcRect` 的非负矩形内裁剪；负值外扩、几乎空的裁剪区域或无效值会回退到完整图片并给出提示，图片平铺、翻转和非矩形蒙版仍未实现。
+
+内部 JSON 模型为 `schemaVersion = 2`，core 与 viewer 应使用同次构建产物；不匹配时解码器会明确报错。
 
 ## URI 约定
 
@@ -119,6 +137,12 @@ adb shell am instrument -w cn.jingzhuan.lib.office.test/cn.jingzhuan.lib.office.
 ```
 
 设备测试使用自定义 Instrumentation，以输出 `ALL CHECKS PASSED` 为通过标志。覆盖无真实路径、无文件长度的管道型 `content://`，DOCX/PPTX 渲染、双击缩放、错误回调、URI 切换、临时文件清理和不同尺寸的截图。实际执行结果与包体积见 `VERIFICATION.md`。
+
+仅运行新增排版、图片裁剪和页码接口检查时，增加 `-e suite layout`，以 `ALL LAYOUT CHECKS PASSED` 为通过标志。该组检查包含真实 `StaticLayout` 坐标、Canvas 像素、窗口截图、拖动页码、布局前跳转和错误状态；完整测试仍保留独立的系统触摸注入用例。
+
+```sh
+adb shell am instrument -w -e suite layout cn.jingzhuan.lib.office.test/cn.jingzhuan.lib.office.OfficeInstrumentation
+```
 
 在支持 32 位应用的设备上，可以指定 ARM32 安装并启动测试，避免默认选择 ARM64：
 

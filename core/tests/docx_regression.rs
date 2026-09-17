@@ -54,6 +54,36 @@ fn explicit_false_spellings_override_bold_when_inherited() -> TestResult {
 }
 
 #[test]
+fn docx_reads_line_spacing_and_first_hanging_and_right_indents() -> TestResult {
+    let mut parts = docx::parts();
+    let document = String::from_utf8(
+        parts
+            .iter()
+            .find(|(name, _)| *name == "word/document.xml")
+            .ok_or("missing document")?
+            .1
+            .clone(),
+    )?
+    .replace(
+        "<w:p><w:r><w:t>Plain paragraph",
+        "<w:p><w:pPr><w:spacing w:line=\"480\" w:lineRule=\"auto\"/><w:ind w:left=\"240\" w:right=\"120\" w:hanging=\"120\"/></w:pPr><w:r><w:t>Plain paragraph",
+    );
+    support::package::replace(&mut parts, "word/document.xml", &document);
+
+    let parsed = parse_reader(Cursor::new(archive(&parts)?))?;
+    let paragraph = &parsed.blocks[1].paragraphs[0];
+    checks::near(paragraph.line_spacing, 2.0);
+    assert_eq!(
+        paragraph.line_spacing_rule,
+        jz_office_core::model::LineSpacingRule::Auto
+    );
+    checks::near(paragraph.indent, 12.0);
+    checks::near(paragraph.right_indent, 6.0);
+    checks::near(paragraph.first_line_indent, -6.0);
+    Ok(())
+}
+
+#[test]
 fn tabs_line_breaks_and_plain_defaults_survive_docx_flow() -> TestResult {
     let bytes = archive(&docx::parts())?;
 

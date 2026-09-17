@@ -19,6 +19,8 @@ public final class MainActivity extends Activity {
     private static final int PICK_DOCUMENT = 20;
     private OfficePreviewView preview;
     private TextView title, status;
+    private ImageButton previous, next;
+    private OfficePreviewView.Info loadedInfo;
     private Uri current;
 
     @Override public void onCreate(Bundle saved) {
@@ -31,12 +33,16 @@ public final class MainActivity extends Activity {
         LinearLayout toolbar = new LinearLayout(this); toolbar.setGravity(Gravity.CENTER_VERTICAL); toolbar.setPadding(dp(12), 0, dp(8), 0);
         title = new TextView(this); title.setText("JZ Office"); title.setTextSize(18); title.setTextColor(0xff25282d); title.setSingleLine(true); title.setEllipsize(android.text.TextUtils.TruncateAt.END);
         toolbar.addView(title, new LinearLayout.LayoutParams(0, dp(56), 1)); title.setGravity(Gravity.CENTER_VERTICAL);
-        toolbar.addView(button(android.R.drawable.ic_menu_add, "Open document", v -> pick()));
-        toolbar.addView(button(android.R.drawable.ic_menu_zoom, "Reset zoom", v -> preview.resetZoom()));
+        toolbar.addView(button(R.drawable.ic_office_open, "Open document", v -> pick()));
+        toolbar.addView(button(R.drawable.ic_office_fit, "Reset zoom", v -> preview.resetZoom()));
+        previous = button(R.drawable.ic_office_previous, "Previous slide", v -> preview.jumpToPage(preview.getCurrentPage() - 1));
+        next = button(R.drawable.ic_office_next, "Next slide", v -> preview.jumpToPage(preview.getCurrentPage() + 1));
+        toolbar.addView(previous); toolbar.addView(next);
         root.addView(toolbar);
         status = new TextView(this); status.setTextSize(12); status.setTextColor(0xff58616b); status.setPadding(dp(16), dp(4), dp(16), dp(8));
         status.setText("DOCX / PPTX"); root.addView(status);
         preview = new OfficePreviewView(this); root.addView(preview, new LinearLayout.LayoutParams(-1, 0, 1));
+        preview.setOnPageChangeListener((page, count) -> updatePageState());
         setContentView(root);
         if (saved != null && saved.getString("uri") != null) open(Uri.parse(saved.getString("uri")));
         else if (getIntent().getData() != null) open(getIntent().getData());
@@ -44,6 +50,8 @@ public final class MainActivity extends Activity {
 
     private ImageButton button(int icon, String label, View.OnClickListener action) {
         ImageButton button = new ImageButton(this); button.setImageResource(icon); button.setContentDescription(label);
+        button.setImageTintList(getColorStateList(R.color.office_toolbar_icon));
+        button.setScaleType(android.widget.ImageView.ScaleType.CENTER);
         android.util.TypedValue value = new android.util.TypedValue(); getTheme().resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, value, true); button.setBackgroundResource(value.resourceId);
         button.setLayoutParams(new LinearLayout.LayoutParams(dp(48), dp(48))); button.setOnClickListener(action);
         if (android.os.Build.VERSION.SDK_INT >= 26) button.setTooltipText(label);
@@ -71,6 +79,7 @@ public final class MainActivity extends Activity {
     }
 
     private void open(Uri uri) {
+        loadedInfo = null; updatePageState();
         current = uri; status.setText("Loading..."); status.setOnClickListener(null);
         title.setText("Document");
         new Thread(() -> {
@@ -83,11 +92,23 @@ public final class MainActivity extends Activity {
         }, "document-name").start();
         preview.open(uri, new OfficePreviewView.Listener() {
             @Override public void onLoaded(OfficePreviewView.Info info) {
-                status.setText(info.format + (info.format.equals("PPTX") ? "  |  " + info.pageCount + " slides" : "  |  Continuous") + (info.warnings.isEmpty() ? "" : "  |  " + info.warnings.size() + " notices"));
+                loadedInfo = info; updatePageState();
                 if (!info.warnings.isEmpty()) status.setOnClickListener(v -> new AlertDialog.Builder(MainActivity.this).setTitle("Preview notices").setMessage(android.text.TextUtils.join("\n\n", info.warnings)).setPositiveButton(android.R.string.ok, null).show());
             }
             @Override public void onError(Exception error) { status.setText(error.getMessage()); }
         });
+    }
+
+    private void updatePageState() {
+        boolean slides = loadedInfo != null && loadedInfo.format.equals("PPTX");
+        previous.setVisibility(slides ? View.VISIBLE : View.GONE);
+        next.setVisibility(slides ? View.VISIBLE : View.GONE);
+        if (loadedInfo == null) return;
+        int page = preview.getCurrentPage();
+        previous.setEnabled(page > 1);
+        next.setEnabled(page > 0 && page < preview.getPageCount());
+        status.setText(loadedInfo.format + (slides ? "  |  " + page + " / " + preview.getPageCount() : "  |  Continuous")
+            + (loadedInfo.warnings.isEmpty() ? "" : "  |  " + loadedInfo.warnings.size() + " notices"));
     }
 
     @Override protected void onNewIntent(Intent intent) {

@@ -17,6 +17,32 @@ pub enum ElementType {
     TABLE,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Default, PartialEq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum VerticalAlignment {
+    #[default]
+    Top,
+    Center,
+    Bottom,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Default, PartialEq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum LineSpacingRule {
+    #[default]
+    Auto,
+    Exact,
+    AtLeast,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq)]
+pub struct ImageCrop {
+    pub left: f32,
+    pub top: f32,
+    pub right: f32,
+    pub bottom: f32,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Document {
@@ -31,7 +57,7 @@ pub struct Document {
 impl Document {
     pub fn new(kind: Kind) -> Self {
         Self {
-            schema_version: 1,
+            schema_version: 2,
             kind,
             width: 595.0,
             pages: Vec::new(),
@@ -70,6 +96,8 @@ pub struct Element {
     pub stroke: u32,
     pub stroke_width: f32,
     pub image: Option<String>,
+    pub image_crop: Option<ImageCrop>,
+    pub vertical_alignment: VerticalAlignment,
     pub paragraphs: Vec<Paragraph>,
     pub rows: Vec<Vec<Vec<Paragraph>>>,
     pub column_widths: Vec<f32>,
@@ -89,6 +117,8 @@ impl Default for Element {
             stroke: 0,
             stroke_width: 1.0,
             image: None,
+            image_crop: None,
+            vertical_alignment: VerticalAlignment::Top,
             paragraphs: Vec::new(),
             rows: Vec::new(),
             column_widths: Vec::new(),
@@ -97,12 +127,17 @@ impl Default for Element {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Paragraph {
     pub runs: Vec<Run>,
     pub alignment: u8,
     pub before: f32,
     pub after: f32,
     pub indent: f32,
+    pub right_indent: f32,
+    pub first_line_indent: f32,
+    pub line_spacing_rule: LineSpacingRule,
+    pub line_spacing: f32,
     pub bullet: String,
 }
 
@@ -114,6 +149,10 @@ impl Default for Paragraph {
             before: 0.0,
             after: 6.0,
             indent: 0.0,
+            right_indent: 0.0,
+            first_line_indent: 0.0,
+            line_spacing_rule: LineSpacingRule::Auto,
+            line_spacing: 1.0,
             bullet: String::new(),
         }
     }

@@ -69,6 +69,7 @@ fn pptx_image_resolves_parent_segments_to_embedded_png() -> TestResult {
 
     let image = checks::element(&document.pages[0].elements, ElementType::IMAGE)?;
     assert_eq!(image.image.as_deref(), Some("ppt/media/pixel.png"));
+    assert!(image.image_crop.is_none());
     checks::bounds(image, [400.0, 112.0, 72.0, 36.0]);
     let mut package = Package::new(Cursor::new(bytes))?;
     assert_eq!(package.read("ppt/media/pixel.png", 1024)?, PNG);

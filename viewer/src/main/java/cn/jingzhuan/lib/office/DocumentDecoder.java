@@ -11,7 +11,7 @@ final class DocumentDecoder {
     static OfficeDocument decode(String json, OfficePackage pkg) throws IOException {
         try {
             JSONObject root = new JSONObject(json);
-            if (root.getInt("schemaVersion") != 1) throw new IOException("Unsupported core model version");
+            if (root.getInt("schemaVersion") != 2) throw new IOException("Unsupported core model version");
             OfficeDocument document = new OfficeDocument();
             document.kind = OfficeDocument.Kind.valueOf(root.getString("kind"));
             document.width = (float) root.getDouble("width");
@@ -41,6 +41,15 @@ final class DocumentDecoder {
         e.rotation = (float) json.getDouble("rotation"); e.padding = (float) json.getDouble("padding");
         e.fill = (int) json.getLong("fill"); e.stroke = (int) json.getLong("stroke");
         e.strokeWidth = (float) json.getDouble("strokeWidth");
+        e.verticalAlignment = OfficeDocument.VerticalAlignment.valueOf(json.getString("verticalAlignment"));
+        JSONObject crop = json.optJSONObject("imageCrop");
+        if (crop != null) {
+            e.imageCrop = new OfficeDocument.ImageCrop();
+            e.imageCrop.left = (float) crop.getDouble("left");
+            e.imageCrop.top = (float) crop.getDouble("top");
+            e.imageCrop.right = (float) crop.getDouble("right");
+            e.imageCrop.bottom = (float) crop.getDouble("bottom");
+        }
         if (!json.isNull("image")) {
             e.image = pkg.image(json.getString("image"));
             if (e.image == null) document.warn("Unsupported image format; a placeholder is shown");
@@ -65,6 +74,10 @@ final class DocumentDecoder {
             OfficeDocument.Paragraph paragraph = new OfficeDocument.Paragraph();
             paragraph.alignment = p.getInt("alignment"); paragraph.before = (float) p.getDouble("before");
             paragraph.after = (float) p.getDouble("after"); paragraph.indent = (float) p.getDouble("indent");
+            paragraph.rightIndent = (float) p.getDouble("rightIndent");
+            paragraph.firstLineIndent = (float) p.getDouble("firstLineIndent");
+            paragraph.lineSpacingRule = OfficeDocument.LineSpacingRule.valueOf(p.getString("lineSpacingRule"));
+            paragraph.lineSpacing = (float) p.getDouble("lineSpacing");
             paragraph.bullet = p.getString("bullet");
             JSONArray runs = p.getJSONArray("runs");
             for (int j = 0; j < runs.length(); j++) {

@@ -2,7 +2,39 @@
 
 日期：2026-09-17。版本：0.1.0。
 
-项目 `JZOfficeAndroid`，Rust crate `jz-office-core`，Android namespace `cn.jingzhuan.lib.office`。核心解析、JNI、URI viewer 和 demo 已实现。viewer 的样例真机路径已验证；demo 系统选择器路径未完成设备验证。
+项目 `JZOfficeAndroid`，Rust crate `jz-office-core`，Android namespace `cn.jingzhuan.lib.office`。以下先记录本轮排版与页码升级，后续章节保留初版验证结果，不将历史结果视为当前产物证明。
+
+## 排版与页码升级
+
+本轮实现 PPTX 文本框顶端/居中/底端对齐、DOCX 倍数/固定/最小行距和首行/悬挂/左右缩进、PPTX 矩形图片裁剪，以及当前页/总页数/跳页/页码监听接口。Demo 接入上一页/下一页，四个工具栏按钮改用统一的 24dp 矢量资源和禁用状态颜色。没有新增运行时依赖。
+
+| 环节 | 当前结果 |
+| --- | --- |
+| Rust | `cargo test --workspace --offline --locked`：39 项测试通过；fmt 与 Clippy `-D warnings` 通过 |
+| Android 构建 | viewer Release AAR、测试 APK、demo Debug/Release APK 构建通过；本轮 Gradle 使用 JDK 25 |
+| 包内容 | AAR 与 APK 保留 ARM32/ARM64；ARM32 so 在 AAR 和测试 APK 中的 SHA-256 一致；Release APK 通过 16 KiB zipalign 检查 |
+| 新增功能运行 | 小米 API 36，指定 ARM32 和 ARM64 进程分别输出 `ALL LAYOUT CHECKS PASSED` |
+| 断言范围 | DOCX 实际基线距离、文字起点与像素边界，PPTX 对齐位置与裁剪像素，页码注册/跳转/拖动/缩放/重载/清空/错误状态，以及布局前跳页 |
+| 画面 | 1080 x 1600、1800 x 1000 Canvas 截图及实际窗口截图；人工和两轮独立复查未发现异常重叠或裁剪；Demo 矢量图标已安装检查 |
+| Demo 路径 | Debug APK 的私有文件 URI 打开与图标显示已验证；系统选择器及 Release APK 的设备运行仍未验证 |
+
+当前测试 APK 的本地与安装文件 SHA-256 均为：
+
+```text
+068b48bad5b7c7e333754bd18626dec11cfb9f1668a392eb1c788a1fe2ad7b1d
+```
+
+当前双 ARM AAR 为 650,425 B，demo Release APK 为 1,051,831 B。初版大小见历史表格；本轮未重新测量单 ABI 和空应用增量。
+
+独立代码审查发现布局前调用 `jumpToPage` 的时序问题，已改为记录目标并在首次有效布局后执行，真机回归通过。缩进测试最初误用表示滚动边界的 `getLineLeft`，已改为文字坐标与实际绘制像素断言；生产缩进实现无需调整。窗口截图增加实际绘制等待和样例背景检查。
+
+华为 API 31 的 ARM64 完整回归曾通过；此后仅调整截图检查。最终包在小米 ARM32 上的旧双击注入用例只收到一组 DOWN/UP，断言失败，未更改生产手势代码或删除该用例。新功能专用测试在两种 ABI 上通过，不能将这一结果描述为最终包所有系统触摸注入均稳定通过。
+
+内部模型升级为 schema 2，core 与 viewer 需同时更新。运行验证仍局限于构造样例，不代表真实 Office 文件的完整兼容率。
+
+## 初版记录
+
+以下为升级前的验证结果和包体积。
 
 ## 完成证据
 

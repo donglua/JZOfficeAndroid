@@ -3,20 +3,9 @@ package cn.jingzhuan.lib.office;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
-import android.graphics.RectF;
-import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
-import android.text.Layout;
-import android.text.SpannableStringBuilder;
-import android.text.Spanned;
-import android.text.StaticLayout;
-import android.text.TextPaint;
-import android.text.style.AbsoluteSizeSpan;
-import android.text.style.ForegroundColorSpan;
-import android.text.style.StyleSpan;
-import android.text.style.UnderlineSpan;
 import android.util.AttributeSet;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
@@ -37,6 +26,10 @@ public final class OfficePreviewView extends View {
         void onError(Exception error);
     }
 
+    public interface OnPageChangeListener {
+        void onPageChanged(int pageNumber, int pageCount);
+    }
+
     public static final class Info {
         public final String format;
         public final int pageCount;
@@ -53,7 +46,9 @@ public final class OfficePreviewView extends View {
     private Future<?> pending;
     private int generation;
     private OfficeDocument document;
-    private final List<DrawPage> pages = new ArrayList<>();
+    private final OfficeRenderer renderer = new OfficeRenderer();
+    private OnPageChangeListener pageListener;
+    private int currentPage, notifiedPage, notifiedCount, pendingJumpPage;
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
     private final OverScroller scroller;
     private final GestureDetector gestures;
@@ -71,7 +66,7 @@ public final class OfficePreviewView extends View {
         gestures = new GestureDetector(context, new GestureDetector.SimpleOnGestureListener() {
             @Override public boolean onDown(MotionEvent event) { scroller.forceFinished(true); return true; }
             @Override public boolean onScroll(MotionEvent first, MotionEvent last, float dx, float dy) {
-                if (!pinch.isInProgress()) { offsetX += dx; offsetY += dy; clampOffsets(); invalidate(); }
+                if (!pinch.isInProgress()) { offsetX += dx; offsetY += dy; clampOffsets(); updateCurrentPage(); invalidate(); }
                 return true;
             }
             @Override public boolean onSingleTapUp(MotionEvent event) { performClick(); return true; }
@@ -94,7 +89,7 @@ public final class OfficePreviewView extends View {
         requireMainThread();
         if (uri == null || listener == null) throw new IllegalArgumentException("URI and listener are required");
         cancel();
-        document = null; pages.clear(); zoom = 1; offsetX = offsetY = 0;
+        document = null; renderer.clear(); currentPage = pendingJumpPage = 0; zoom = 1; offsetX = offsetY = 0;
         contentWidth = contentHeight = 0;
         status = "Loading..."; invalidate();
         final int token = generation;
@@ -109,8 +104,11 @@ public final class OfficePreviewView extends View {
                 OfficePackage.checkCancelled();
                 main.post(() -> {
                     if (token != generation) return;
-                    document = loaded; status = ""; layoutDocument(); invalidate();
+                    document = loaded; status = ""; renderer.layout(loaded);
+                    contentWidth = renderer.width; contentHeight = renderer.height; currentPage = 1;
+                    clampOffsets(); invalidate();
                     listener.onLoaded(new Info(loaded));
+                    if (token == generation) updateCurrentPage();
                 });
             } catch (IOException | RuntimeException | LinkageError failure) {
                 Exception error = failure instanceof Exception ? (Exception) failure : new IOException("Native core is unavailable for this device ABI", failure);
@@ -120,12 +118,13 @@ public final class OfficePreviewView extends View {
                 });
             }
         });
+        notifyPageChanged();
     }
 
     public void clear() {
-        requireMainThread(); cancel(); document = null; pages.clear();
+        requireMainThread(); cancel(); document = null; renderer.clear(); currentPage = pendingJumpPage = 0;
         contentWidth = contentHeight = offsetX = offsetY = 0;
-        status = ""; invalidate();
+        status = ""; invalidate(); notifyPageChanged();
     }
 
     public void resetZoom() { requireMainThread(); setZoom(1, getWidth() / 2f, getHeight() / 2f); }
@@ -133,6 +132,62 @@ public final class OfficePreviewView extends View {
     public void setZoom(float value) { requireMainThread(); setZoom(value, getWidth() / 2f, getHeight() / 2f); }
 
     public float getZoom() { return zoom; }
+
+    public int getPageCount() { return renderer.pages.size(); }
+
+    public int getCurrentPage() { return currentPage; }
+
+    public void setOnPageChangeListener(OnPageChangeListener listener) {
+        requireMainThread(); pageListener = listener;
+        notifiedPage = currentPage; notifiedCount = getPageCount();
+        if (listener != null) listener.onPageChanged(currentPage, getPageCount());
+    }
+
+    public void jumpToPage(int pageNumber) {
+        requireMainThread();
+        if (pageNumber < 1 || pageNumber > getPageCount()) throw new IllegalArgumentException("Page number is outside the loaded document");
+        scroller.forceFinished(true);
+        currentPage = pageNumber;
+        if (getWidth() == 0 || getHeight() == 0) {
+            pendingJumpPage = pageNumber; notifyPageChanged(); invalidate(); return;
+        }
+        scrollToPage(pageNumber); pendingJumpPage = 0; updateCurrentPage(); invalidate();
+    }
+
+    private void scrollToPage(int pageNumber) {
+        offsetX = 0; offsetY = renderer.pages.get(pageNumber - 1).y * scale(); clampOffsets();
+    }
+
+    private boolean applyPendingJump() {
+        if (pendingJumpPage == 0 || getWidth() == 0 || getHeight() == 0 || pendingJumpPage > getPageCount()) return false;
+        scrollToPage(pendingJumpPage); pendingJumpPage = 0; updateCurrentPage(); return true;
+    }
+
+    private void updateCurrentPage() {
+        if (renderer.pages.isEmpty()) currentPage = 0;
+        else if (getWidth() > 0 && getHeight() > 0) {
+            float visibleTop = (offsetY - top()) / scale();
+            float visibleBottom = visibleTop + getHeight() / scale();
+            int bestPage = Math.max(1, currentPage);
+            float bestVisible = -1;
+            for (int i = 0; i < renderer.pages.size(); i++) {
+                OfficeRenderer.Page page = renderer.pages.get(i);
+                float visible = Math.max(0, Math.min(visibleBottom, page.y + page.height) - Math.max(visibleTop, page.y));
+                if (visible > bestVisible + 0.01f || (Math.abs(visible - bestVisible) <= 0.01f && i + 1 == currentPage)) {
+                    bestVisible = visible; bestPage = i + 1;
+                }
+            }
+            currentPage = bestPage;
+        }
+        notifyPageChanged();
+    }
+
+    private void notifyPageChanged() {
+        int count = getPageCount();
+        if (notifiedPage == currentPage && notifiedCount == count) return;
+        notifiedPage = currentPage; notifiedCount = count;
+        if (pageListener != null) pageListener.onPageChanged(currentPage, count);
+    }
 
     private void cancel() {
         generation++;
@@ -168,7 +223,7 @@ public final class OfficePreviewView extends View {
         zoom = Math.max(1, Math.min(4, value));
         offsetX = x * scale() - focusX + left();
         offsetY = y * scale() - focusY + top();
-        clampOffsets(); invalidate();
+        clampOffsets(); updateCurrentPage(); invalidate();
     }
 
     @Override public boolean onTouchEvent(MotionEvent event) {
@@ -180,119 +235,12 @@ public final class OfficePreviewView extends View {
     @Override public boolean performClick() { super.performClick(); return true; }
     @Override public void computeScroll() {
         if (scroller.computeScrollOffset()) {
-            offsetX = scroller.getCurrX(); offsetY = scroller.getCurrY(); postInvalidateOnAnimation();
+            offsetX = scroller.getCurrX(); offsetY = scroller.getCurrY(); updateCurrentPage(); postInvalidateOnAnimation();
         }
     }
     @Override public boolean canScrollVertically(int direction) { return direction < 0 ? offsetY > 0 : offsetY < maxY(); }
-    @Override protected void onSizeChanged(int w, int h, int oldw, int oldh) { clampOffsets(); }
-
-    private static final class TextBlock {
-        StaticLayout layout;
-        float x, y;
-    }
-    private static final class DrawElement {
-        OfficeDocument.Element source;
-        final List<TextBlock> texts = new ArrayList<>();
-        final List<RectF> cells = new ArrayList<>();
-        float x, y, width, height;
-    }
-    private static final class DrawPage {
-        float y, width, height;
-        int background;
-        final List<DrawElement> elements = new ArrayList<>();
-    }
-
-    private void layoutDocument() {
-        pages.clear(); contentHeight = 0;
-        if (document == null) return;
-        contentWidth = Math.max(1, document.width);
-        if (document.kind == OfficeDocument.Kind.DOCX) {
-            DrawPage page = new DrawPage(); page.width = contentWidth; page.background = 0xffffffff;
-            float y = 32;
-            for (OfficeDocument.Element element : document.blocks) {
-                DrawElement drawn = layoutElement(element, contentWidth - 64, true);
-                drawn.x = 32; drawn.y = y;
-                if (element.type == OfficeDocument.Type.IMAGE) drawn.x += (contentWidth - 64 - drawn.width) / 2;
-                page.elements.add(drawn); y += drawn.height + 6;
-            }
-            page.height = Math.max(300, y + 32); pages.add(page); contentHeight = page.height;
-        } else {
-            for (OfficeDocument.Page source : document.pages) {
-                DrawPage page = new DrawPage(); page.y = contentHeight;
-                page.width = source.width; page.height = source.height; page.background = source.background;
-                for (OfficeDocument.Element e : source.elements) page.elements.add(layoutElement(e, e.width, false));
-                pages.add(page); contentHeight += page.height + 16;
-            }
-            contentHeight = Math.max(0, contentHeight - 16);
-        }
-        clampOffsets();
-    }
-
-    private DrawElement layoutElement(OfficeDocument.Element e, float available, boolean flow) {
-        DrawElement d = new DrawElement(); d.source = e;
-        d.x = e.x; d.y = e.y;
-        d.width = Math.max(1, flow ? (e.type == OfficeDocument.Type.TABLE && e.width > 0 ? Math.min(e.width, available) : available) : e.width);
-        d.height = Math.max(1, e.height);
-        if (e.type == OfficeDocument.Type.IMAGE && flow) {
-            float width = e.width > 0 ? e.width : e.image != null ? e.image.getWidth() : available;
-            float height = e.height > 0 ? e.height : e.image != null ? e.image.getHeight() : 100;
-            d.width = Math.min(available, width); d.height = height * d.width / Math.max(1, width);
-        } else if (e.type == OfficeDocument.Type.TABLE) {
-            int cols = 0;
-            for (List<List<OfficeDocument.Paragraph>> row : e.rows) cols = Math.max(cols, row.size());
-            float total = 0;
-            for (Float width : e.columnWidths) total += Math.max(1, width);
-            float y = 0;
-            for (List<List<OfficeDocument.Paragraph>> row : e.rows) {
-                float x = 0, rowHeight = 20;
-                int first = d.cells.size();
-                for (int c = 0; c < cols; c++) {
-                    float width = e.columnWidths.size() == cols && total > 0 ? d.width * Math.max(1, e.columnWidths.get(c)) / total : d.width / Math.max(1, cols);
-                    List<OfficeDocument.Paragraph> cell = c < row.size() ? row.get(c) : Collections.emptyList();
-                    rowHeight = Math.max(rowHeight, layoutParagraphs(cell, x + 5, y + 5, Math.max(1, width - 10), d.texts) - y + 5);
-                    d.cells.add(new RectF(x, y, x + width, y)); x += width;
-                }
-                for (int i = first; i < d.cells.size(); i++) d.cells.get(i).bottom = y + rowHeight;
-                y += rowHeight;
-            }
-            if (flow) d.height = Math.max(1, y);
-            else if (y > d.height) document.warn("Table content exceeds its slide bounds and is clipped");
-        } else if (!e.paragraphs.isEmpty()) {
-            float padding = flow ? 0 : Math.max(0, e.padding);
-            float height = layoutParagraphs(e.paragraphs, padding, padding, Math.max(1, d.width - 2 * padding), d.texts) + padding;
-            if (flow) d.height = Math.max(1, height);
-            else if (height > d.height + 1) document.warn("Text exceeds its slide box and is clipped");
-        }
-        return d;
-    }
-
-    private static float layoutParagraphs(List<OfficeDocument.Paragraph> paragraphs, float x, float y, float width, List<TextBlock> out) {
-        for (OfficeDocument.Paragraph paragraph : paragraphs) {
-            y += Math.max(0, paragraph.before);
-            SpannableStringBuilder text = new SpannableStringBuilder();
-            text.append(paragraph.bullet);
-            for (OfficeDocument.Run run : paragraph.runs) {
-                int start = text.length(); text.append(run.text);
-                if (start == text.length()) continue;
-                int flags = Spanned.SPAN_EXCLUSIVE_EXCLUSIVE;
-                text.setSpan(new AbsoluteSizeSpan(Math.max(1, Math.round(run.size))), start, text.length(), flags);
-                text.setSpan(new ForegroundColorSpan(run.color), start, text.length(), flags);
-                int style = (run.bold ? Typeface.BOLD : 0) | (run.italic ? Typeface.ITALIC : 0);
-                if (style != 0) text.setSpan(new StyleSpan(style), start, text.length(), flags);
-                if (run.underline) text.setSpan(new UnderlineSpan(), start, text.length(), flags);
-            }
-            if (text.length() == 0) text.append(" ");
-            TextPaint font = new TextPaint(Paint.ANTI_ALIAS_FLAG);
-            font.setTextSize(paragraph.runs.isEmpty() ? 12 : paragraph.runs.get(0).size);
-            font.setColor(0xff202124);
-            Layout.Alignment align = paragraph.alignment == 1 ? Layout.Alignment.ALIGN_CENTER : paragraph.alignment == 2 ? Layout.Alignment.ALIGN_OPPOSITE : Layout.Alignment.ALIGN_NORMAL;
-            float indent = Math.max(0, Math.min(width - 1, paragraph.indent));
-            TextBlock block = new TextBlock(); block.x = x + indent; block.y = y;
-            block.layout = StaticLayout.Builder.obtain(text, 0, text.length(), font, Math.max(1, (int) (width - indent)))
-                .setAlignment(align).setIncludePad(false).setLineSpacing(1, 1).build();
-            out.add(block); y += block.layout.getHeight() + Math.max(0, paragraph.after);
-        }
-        return y;
+    @Override protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        if (!applyPendingJump()) { clampOffsets(); updateCurrentPage(); }
     }
 
     @Override protected void onDraw(Canvas canvas) {
@@ -305,42 +253,7 @@ public final class OfficePreviewView extends View {
         }
         canvas.save(); canvas.translate(left() - offsetX, top() - offsetY); canvas.scale(scale(), scale());
         float visibleTop = (offsetY - top()) / scale(), visibleBottom = visibleTop + getHeight() / scale();
-        for (DrawPage page : pages) {
-            if (page.y + page.height < visibleTop || page.y > visibleBottom) continue;
-            canvas.save(); canvas.translate(0, page.y); canvas.clipRect(0, 0, page.width, page.height);
-            paint.setStyle(Paint.Style.FILL); paint.setColor(page.background); canvas.drawRect(0, 0, page.width, page.height, paint);
-            for (DrawElement e : page.elements) {
-                if (e.source.rotation != 0 || (e.y + e.height >= visibleTop - page.y && e.y <= visibleBottom - page.y)) drawElement(canvas, e);
-            }
-            canvas.restore();
-        }
-        canvas.restore();
-    }
-
-    private void drawElement(Canvas canvas, DrawElement d) {
-        OfficeDocument.Element e = d.source;
-        canvas.save(); canvas.translate(d.x, d.y); canvas.rotate(e.rotation, d.width / 2, d.height / 2);
-        RectF rect = new RectF(0, 0, d.width, d.height);
-        paint.setStyle(Paint.Style.FILL); paint.setColor(e.fill);
-        if (e.type == OfficeDocument.Type.ELLIPSE) canvas.drawOval(rect, paint);
-        else if (e.type != OfficeDocument.Type.LINE) canvas.drawRect(rect, paint);
-        paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(e.strokeWidth); paint.setColor(e.stroke);
-        if (e.type == OfficeDocument.Type.ELLIPSE) canvas.drawOval(rect, paint);
-        else if (e.type == OfficeDocument.Type.LINE) canvas.drawLine(0, 0, e.width, e.height, paint);
-        else if (e.stroke != 0) canvas.drawRect(rect, paint);
-        canvas.clipRect(rect);
-        paint.setStyle(Paint.Style.FILL);
-        if (e.type == OfficeDocument.Type.IMAGE) {
-            if (e.image != null) { paint.setColor(0xffffffff); canvas.drawBitmap(e.image, null, rect, paint); }
-            else { paint.setColor(0xffe0e0e0); canvas.drawRect(rect, paint); }
-        }
-        if (e.type == OfficeDocument.Type.TABLE) {
-            paint.setColor(0xffb7bec7); paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(0.6f);
-            for (RectF cell : d.cells) canvas.drawRect(cell, paint);
-        }
-        for (TextBlock block : d.texts) {
-            canvas.save(); canvas.translate(block.x, block.y); block.layout.draw(canvas); canvas.restore();
-        }
+        renderer.draw(canvas, visibleTop, visibleBottom);
         canvas.restore();
     }
 }
