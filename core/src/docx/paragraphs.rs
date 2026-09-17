@@ -1,0 +1,135 @@
+use super::{alternate, format, skipped, Parser, MAX_BLOCKS};
+use crate::model::{Element, Paragraph, Run};
+use crate::xml::Node;
+use crate::{Error, Result};
+
+impl Parser<'_> {
+    pub(super) fn paragraph(&mut self, node: &Node, in_cell: bool) -> Result<Vec<Element>> {
+        let (paragraph, font) = self.styles.paragraph(node, &mut self.document);
+        let mut flow = Flow {
+            current: paragraph.clone(),
+            template: paragraph,
+            elements: Vec::new(),
+            width: self.document.width - 64.0,
+            in_cell,
+            limit: if in_cell {
+                1
+            } else {
+                MAX_BLOCKS.saturating_sub(self.document.blocks.len())
+            },
+        };
+        self.inline(node, &font, &mut flow)?;
+        if flow.elements.is_empty() && flow.current.runs.is_empty() {
+            let mut mark = font;
+            format::font(&mut mark, node.child("pPr").and_then(|n| n.child("rPr")));
+            flow.text("", &mark);
+        }
+        if !flow.current.runs.is_empty() || flow.elements.is_empty() {
+            flow.flush()?;
+        }
+        Ok(flow.elements)
+    }
+
+    fn inline(&mut self, parent: &Node, font: &Run, flow: &mut Flow) -> Result<()> {
+        for node in &parent.children {
+            match node.name.as_str() {
+                "r" => {
+                    let mut font = font.clone();
+                    let properties = node.child("rPr");
+                    let id = properties
+                        .and_then(|n| n.child("rStyle"))
+                        .map_or(self.styles.default_character.as_str(), |n| n.attr("val"));
+                    for style in self.styles.chain(id, &mut self.document).iter().rev() {
+                        format::font(&mut font, style.child("rPr"));
+                    }
+                    format::font(&mut font, properties);
+                    self.inline(node, &font, flow)?;
+                }
+                "t" => flow.text(&node.text, font),
+                "tab" | "ptab" => flow.text("\t", font),
+                "br" | "cr" => {
+                    if matches!(node.attr("type"), "page" | "column") {
+                        self.document
+                            .warn("Page and column breaks are rendered as line breaks.");
+                    }
+                    flow.text("\n", font);
+                }
+                "noBreakHyphen" => flow.text("\u{2011}", font),
+                "softHyphen" => flow.text("\u{ad}", font),
+                "drawing" => {
+                    if flow.in_cell {
+                        self.document.warn("Images inside table cells are omitted.");
+                    } else {
+                        for image in self.drawings(node)? {
+                            flow.image(image)?;
+                        }
+                    }
+                }
+                "sdt" => {
+                    if let Some(content) = node.child("sdtContent") {
+                        self.inline(content, font, flow)?;
+                    }
+                }
+                "AlternateContent" => {
+                    if let Some(content) = alternate(node) {
+                        self.inline(content, font, flow)?;
+                    }
+                }
+                "sym" => self
+                    .document
+                    .warn("Symbol fonts are unsupported; symbols are omitted."),
+                name if skipped(name) => (),
+                _ => self.inline(node, font, flow)?,
+            }
+        }
+        Ok(())
+    }
+}
+
+struct Flow {
+    template: Paragraph,
+    current: Paragraph,
+    elements: Vec<Element>,
+    width: f32,
+    in_cell: bool,
+    limit: usize,
+}
+
+impl Flow {
+    fn text(&mut self, text: &str, font: &Run) {
+        self.current.runs.push(Run {
+            text: text.to_owned(),
+            ..font.clone()
+        });
+    }
+
+    fn image(&mut self, image: Element) -> Result<()> {
+        if !self.current.runs.is_empty() || !self.current.bullet.is_empty() {
+            self.current.after = 0.0;
+            self.flush()?;
+        }
+        self.push(image)?;
+        self.current = self.template.clone();
+        self.current.before = 0.0;
+        self.current.bullet.clear();
+        Ok(())
+    }
+
+    fn flush(&mut self) -> Result<()> {
+        let paragraph = std::mem::replace(&mut self.current, self.template.clone());
+        self.push(Element {
+            width: self.width,
+            padding: 0.0,
+            paragraphs: vec![paragraph],
+            ..Element::default()
+        })
+    }
+
+    fn push(&mut self, element: Element) -> Result<()> {
+        if self.elements.len() >= self.limit {
+            return Err(Error::Limit("DOCX exceeds 5000 flow blocks"));
+        }
+        self.elements.push(element);
+        Ok(())
+    }
+}

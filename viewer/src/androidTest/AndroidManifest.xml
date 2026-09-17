@@ -1,0 +1,6 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <activity android:name="cn.jingzhuan.lib.office.PreviewTestActivity" android:exported="true" />
+        <provider android:name="cn.jingzhuan.lib.office.StreamProvider" android:authorities="${applicationId}.fixtures" android:exported="false" />
+    </application>
+</manifest>

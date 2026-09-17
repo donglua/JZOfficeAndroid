@@ -1,0 +1,1 @@
+-keep class cn.jingzhuan.lib.office.NativeCore { native <methods>; }

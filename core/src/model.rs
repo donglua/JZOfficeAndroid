@@ -1,0 +1,143 @@
+use serde::Serialize;
+
+#[derive(Debug, Clone, Serialize)]
+pub enum Kind {
+    DOCX,
+    PPTX,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub enum ElementType {
+    #[default]
+    TEXT,
+    IMAGE,
+    RECT,
+    ELLIPSE,
+    LINE,
+    TABLE,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Document {
+    pub schema_version: u32,
+    pub kind: Kind,
+    pub width: f32,
+    pub pages: Vec<Page>,
+    pub blocks: Vec<Element>,
+    pub warnings: Vec<String>,
+}
+
+impl Document {
+    pub fn new(kind: Kind) -> Self {
+        Self {
+            schema_version: 1,
+            kind,
+            width: 595.0,
+            pages: Vec::new(),
+            blocks: Vec::new(),
+            warnings: Vec::new(),
+        }
+    }
+
+    pub fn warn(&mut self, message: &str) {
+        if self.warnings.len() < 100 && !self.warnings.iter().any(|s| s == message) {
+            self.warnings.push(message.to_owned());
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Page {
+    pub width: f32,
+    pub height: f32,
+    pub background: u32,
+    pub elements: Vec<Element>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Element {
+    #[serde(rename = "type")]
+    pub kind: ElementType,
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+    pub rotation: f32,
+    pub padding: f32,
+    pub fill: u32,
+    pub stroke: u32,
+    pub stroke_width: f32,
+    pub image: Option<String>,
+    pub paragraphs: Vec<Paragraph>,
+    pub rows: Vec<Vec<Vec<Paragraph>>>,
+    pub column_widths: Vec<f32>,
+}
+
+impl Default for Element {
+    fn default() -> Self {
+        Self {
+            kind: ElementType::TEXT,
+            x: 0.0,
+            y: 0.0,
+            width: 0.0,
+            height: 0.0,
+            rotation: 0.0,
+            padding: 4.0,
+            fill: 0,
+            stroke: 0,
+            stroke_width: 1.0,
+            image: None,
+            paragraphs: Vec::new(),
+            rows: Vec::new(),
+            column_widths: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Paragraph {
+    pub runs: Vec<Run>,
+    pub alignment: u8,
+    pub before: f32,
+    pub after: f32,
+    pub indent: f32,
+    pub bullet: String,
+}
+
+impl Default for Paragraph {
+    fn default() -> Self {
+        Self {
+            runs: Vec::new(),
+            alignment: 0,
+            before: 0.0,
+            after: 6.0,
+            indent: 0.0,
+            bullet: String::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Run {
+    pub text: String,
+    pub size: f32,
+    pub bold: bool,
+    pub italic: bool,
+    pub underline: bool,
+    pub color: u32,
+}
+
+impl Default for Run {
+    fn default() -> Self {
+        Self {
+            text: String::new(),
+            size: 12.0,
+            bold: false,
+            italic: false,
+            underline: false,
+            color: 0xff202124,
+        }
+    }
+}

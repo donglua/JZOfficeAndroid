@@ -1,0 +1,17 @@
+[package]
+name = "jz-office-android"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "jz_office"
+crate-type = ["cdylib"]
+
+[dependencies]
+jz-office-core = { path = "../../core" }
+jni = { version = "=0.21.1", default-features = false }
+serde_json = "=1.0.149"
+
+[lints]
+workspace = true

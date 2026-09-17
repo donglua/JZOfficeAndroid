@@ -1,0 +1,25 @@
+plugins { id 'com.android.application' }
+android {
+    enableKotlin = false
+    namespace 'cn.jingzhuan.lib.office.demo'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'cn.jingzhuan.lib.office.demo'
+        minSdk 23
+        targetSdk 35
+        versionCode 1
+        versionName '0.1.0'
+    }
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+}
+dependencies { implementation project(':viewer') }
