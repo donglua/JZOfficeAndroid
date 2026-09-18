@@ -36,6 +36,9 @@ impl Styles<'_> {
                 }
                 if let Some(geometry) = properties.child("prstGeom") {
                     preset = geometry.attr("prst");
+                    if preset == "roundRect" && has_zero_corner_radius(geometry) {
+                        preset = "rect";
+                    }
                 }
                 if properties.child("custGeom").is_some() {
                     preset = "custom";
@@ -92,4 +95,17 @@ impl Styles<'_> {
                 .warn("PPTX line dashes and arrowheads are not supported.");
         }
     }
+}
+
+fn has_zero_corner_radius(geometry: &Node) -> bool {
+    let Some(adjustment) = geometry
+        .child("avLst")
+        .and_then(|list| list.named("gd").find(|guide| guide.attr("name") == "adj"))
+    else {
+        return false;
+    };
+    let mut formula = adjustment.attr("fmla").split_whitespace();
+    formula.next() == Some("val")
+        && formula.next().and_then(|value| value.parse::<i32>().ok()) == Some(0)
+        && formula.next().is_none()
 }
