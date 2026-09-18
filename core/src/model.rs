@@ -89,7 +89,7 @@ pub struct Document {
 impl Document {
     pub fn new(kind: Kind) -> Self {
         Self {
-            schema_version: 5,
+            schema_version: 6,
             kind,
             width: 595.0,
             pages: Vec::new(),
@@ -138,6 +138,7 @@ pub struct Element {
     pub paragraphs: Vec<Paragraph>,
     pub rows: Vec<Vec<Vec<Paragraph>>>,
     pub column_widths: Vec<f32>,
+    pub cell_fills: Vec<Vec<u32>>,
     pub paths: Vec<Path>,
     pub fill_gradient: Option<GradientFill>,
 }
@@ -164,6 +165,7 @@ impl Default for Element {
             paragraphs: Vec::new(),
             rows: Vec::new(),
             column_widths: Vec::new(),
+            cell_fills: Vec::new(),
             paths: Vec::new(),
             fill_gradient: None,
         }

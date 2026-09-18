@@ -48,6 +48,7 @@ impl Render<'_> {
                 return Err(Error::Limit("PPTX table exceeds 500 rows"));
             }
             let mut cells = Vec::new();
+            let mut fills = Vec::new();
             for cell in row.named("tc") {
                 if cells.len() >= element.column_widths.len() {
                     return Err(Error::Invalid("PPTX table is not rectangular"));
@@ -66,16 +67,21 @@ impl Render<'_> {
                     None => Vec::new(),
                 };
                 cells.push(paragraphs);
+                let fill = match cell.child("tcPr") {
+                    Some(properties) => self.theme.fill(properties, 0, self.doc),
+                    None => 0,
+                };
+                fills.push(fill);
                 if cell.child("tcPr").is_some() {
-                    self.doc.warn(
-                        "PPTX cell fills, borders, margins, and vertical alignment are simplified.",
-                    );
+                    self.doc
+                        .warn("PPTX cell borders, margins, and vertical alignment are simplified.");
                 }
             }
             if cells.len() != element.column_widths.len() {
                 return Err(Error::Invalid("PPTX table is not rectangular"));
             }
             element.rows.push(cells);
+            element.cell_fills.push(fills);
         }
         if element.rows.is_empty() {
             return Ok(Vec::new());

@@ -41,6 +41,7 @@ final class OfficeDocument {
         final List<Paragraph> paragraphs = new ArrayList<>();
         final List<List<List<Paragraph>>> rows = new ArrayList<>();
         final List<Float> columnWidths = new ArrayList<>();
+        final List<List<Integer>> cellFills = new ArrayList<>();
         final List<Path> paths = new ArrayList<>();
         GradientFill fillGradient;
     }

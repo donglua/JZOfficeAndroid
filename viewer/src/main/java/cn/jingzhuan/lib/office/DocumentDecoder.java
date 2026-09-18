@@ -11,7 +11,7 @@ final class DocumentDecoder {
     static OfficeDocument decode(String json) throws IOException {
         try {
             JSONObject root = new JSONObject(json);
-            if (root.getInt("schemaVersion") != 5) throw new IOException("Unsupported core model version");
+            if (root.getInt("schemaVersion") != 6) throw new IOException("Unsupported core model version");
             OfficeDocument document = new OfficeDocument();
             document.kind = OfficeDocument.Kind.valueOf(root.getString("kind"));
             document.width = (float) root.getDouble("width");
@@ -173,6 +173,15 @@ final class DocumentDecoder {
             JSONArray cells = rows.getJSONArray(i);
             for (int j = 0; j < cells.length(); j++) row.add(paragraphs(cells.getJSONArray(j)));
             e.rows.add(row);
+        }
+        JSONArray fills = json.getJSONArray("cellFills");
+        if (fills.length() != 0 && fills.length() != e.rows.size()) throw new JSONException("Invalid table fill rows");
+        for (int i = 0; i < fills.length(); i++) {
+            JSONArray cells = fills.getJSONArray(i);
+            if (cells.length() != e.rows.get(i).size()) throw new JSONException("Invalid table fill columns");
+            List<Integer> row = new ArrayList<>();
+            for (int j = 0; j < cells.length(); j++) row.add((int) cells.getLong(j));
+            e.cellFills.add(row);
         }
         return e;
     }

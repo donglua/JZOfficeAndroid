@@ -230,6 +230,7 @@ final class OfficeRenderer {
             } else { paint.setColor(0xffe0e0e0); canvas.drawRect(rect, paint); }
         }
         if (e.type == OfficeDocument.Type.TABLE) {
+            drawTableCellFills(canvas, e, d.cells);
             paint.setColor(0xffb7bec7); paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(0.6f);
             for (RectF cell : d.cells) canvas.drawRect(cell, paint);
         }
@@ -237,5 +238,23 @@ final class OfficeRenderer {
             canvas.save(); canvas.translate(block.x, block.y); block.layout.draw(canvas); canvas.restore();
         }
         canvas.restore();
+    }
+
+    private void drawTableCellFills(Canvas canvas, OfficeDocument.Element e, List<RectF> cells) {
+        if (e.cellFills.isEmpty()) return;
+        int columns = 0;
+        for (List<List<OfficeDocument.Paragraph>> row : e.rows) columns = Math.max(columns, row.size());
+        if (columns == 0) return;
+        paint.setShader(null); paint.setStyle(Paint.Style.FILL);
+        int index = 0;
+        for (int row = 0; row < e.rows.size() && index < cells.size(); row++) {
+            List<Integer> fills = row < e.cellFills.size() ? e.cellFills.get(row) : Collections.emptyList();
+            for (int column = 0; column < columns && index < cells.size(); column++, index++) {
+                int fill = column < fills.size() ? fills.get(column) : 0;
+                if ((fill >>> 24) == 0) continue;
+                paint.setColor(fill);
+                canvas.drawRect(cells.get(index), paint);
+            }
+        }
     }
 }

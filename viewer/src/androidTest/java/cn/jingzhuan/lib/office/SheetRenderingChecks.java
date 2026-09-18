@@ -37,7 +37,7 @@ final class SheetRenderingChecks {
     }
 
     private static void checkDecoder() throws Exception {
-        String json = "{\"schemaVersion\":5,\"kind\":\"XLSX\",\"width\":595,\"warnings\":[],\"blocks\":[],\"pages\":[],"
+        String json = "{\"schemaVersion\":6,\"kind\":\"XLSX\",\"width\":595,\"warnings\":[],\"blocks\":[],\"pages\":[],"
             + "\"cellStyles\":[{\"fontSize\":13,\"bold\":true,\"italic\":true,\"underline\":true,\"color\":4279385946,"
             + "\"fill\":4294967295,\"alignment\":3,\"verticalAlignment\":\"BOTTOM\",\"wrap\":true,"
             + "\"borders\":[4278190335,null,4278190335,null]}],"

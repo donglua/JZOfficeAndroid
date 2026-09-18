@@ -20,7 +20,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class OfficeInstrumentation extends Instrumentation {
     private PreviewTestActivity activity;
     private final StringBuilder results = new StringBuilder();
-    private boolean layoutOnly, limitsOnly, imagesOnly, xlsxOnly, demoOnly, pptxOnly, pathsOnly, backgroundsOnly;
+    private boolean layoutOnly, limitsOnly, imagesOnly, xlsxOnly, demoOnly, pptxOnly, pathsOnly, tablesOnly, backgroundsOnly;
 
     @Override public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
@@ -31,6 +31,7 @@ public final class OfficeInstrumentation extends Instrumentation {
         demoOnly = arguments != null && "demo-xlsx".equals(arguments.getString("suite"));
         pptxOnly = arguments != null && "pptx".equals(arguments.getString("suite"));
         pathsOnly = arguments != null && "paths".equals(arguments.getString("suite"));
+        tablesOnly = arguments != null && "tables".equals(arguments.getString("suite"));
         backgroundsOnly = arguments != null && "backgrounds".equals(arguments.getString("suite"));
         start();
     }
@@ -40,6 +41,12 @@ public final class OfficeInstrumentation extends Instrumentation {
             if (backgroundsOnly) {
                 results.append(PptxBackgroundChecks.run(this));
                 output.putString("stream", "\n" + results + "ALL BACKGROUND CHECKS PASSED\n");
+                finish(Activity.RESULT_OK, output);
+                return;
+            }
+            if (tablesOnly) {
+                results.append(PptxTableChecks.run(this));
+                output.putString("stream", "\n" + results + "ALL TABLE CHECKS PASSED\n");
                 finish(Activity.RESULT_OK, output);
                 return;
             }
@@ -74,6 +81,7 @@ public final class OfficeInstrumentation extends Instrumentation {
             if (pptxOnly) {
                 results.append(PptxCompatibilityChecks.run(this, activity));
                 results.append(PptxPathChecks.run(this));
+                results.append(PptxTableChecks.run(this));
                 results.append(PptxBackgroundChecks.run(this));
                 results.append(PptxChartChecks.run(this, activity));
                 results.append(PptxColorChecks.run(this, activity));
