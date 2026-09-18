@@ -2,3 +2,29 @@ plugins {
     id 'com.android.library' version '9.2.1' apply false
     id 'com.android.application' version '9.2.1' apply false
 }
+
+def configuredValue = { String propertyName, String environmentName, String fallback ->
+    project.findProperty(propertyName) ?: System.getenv(environmentName) ?: fallback
+}
+
+ext {
+    publishedGroupId = configuredValue('publishedGroupId', 'PUBLISHED_GROUP_ID', 'io.github.donglua')
+    publishedArtifactId = configuredValue('publishedArtifactId', 'PUBLISHED_ARTIFACT_ID', 'viewer')
+    publishedVersion = configuredValue('publishedVersion', 'PUBLISHED_VERSION', '0.1.0')
+    publishedName = configuredValue('publishedName', 'PUBLISHED_NAME', 'JZ Office Android')
+    publishedDescription = configuredValue('publishedDescription', 'PUBLISHED_DESCRIPTION', 'Limited offline DOCX, PPTX and XLSX preview for Android.')
+    publishedUrl = configuredValue('publishedUrl', 'PUBLISHED_URL', 'https://github.com/donglua/JZOfficeAndroid')
+    publishedLicenseName = configuredValue('publishedLicenseName', 'PUBLISHED_LICENSE_NAME', '')
+    publishedLicenseUrl = configuredValue('publishedLicenseUrl', 'PUBLISHED_LICENSE_URL', '')
+    publishedDeveloperId = configuredValue('publishedDeveloperId', 'PUBLISHED_DEVELOPER_ID', 'donglua')
+    publishedDeveloperName = configuredValue('publishedDeveloperName', 'PUBLISHED_DEVELOPER_NAME', '')
+    publishedDeveloperEmail = configuredValue('publishedDeveloperEmail', 'PUBLISHED_DEVELOPER_EMAIL', '')
+    sonatypeNamespace = configuredValue('sonatypeNamespace', 'SONATYPE_NAMESPACE', 'io.github.donglua')
+    sonatypeUsername = configuredValue('sonatypeUsername', 'SONATYPE_USERNAME', '')
+    sonatypePassword = configuredValue('sonatypePassword', 'SONATYPE_PASSWORD', '')
+    signingKey = configuredValue('signingKey', 'SIGNING_KEY', '')
+    signingPassword = configuredValue('signingPassword', 'SIGNING_PASSWORD', '')
+}
+
+group = publishedGroupId
+version = publishedVersion
