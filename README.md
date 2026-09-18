@@ -161,7 +161,7 @@ adb install -r viewer/build/outputs/apk/androidTest/debug/viewer-debug-androidTe
 adb shell am instrument -w cn.jingzhuan.lib.office.test/cn.jingzhuan.lib.office.OfficeInstrumentation
 ```
 
-设备测试使用自定义 Instrumentation，以输出 `ALL CHECKS PASSED` 为通过标志。覆盖无真实路径、无文件长度的管道型 `content://`，DOCX/PPTX/XLSX 渲染、双击缩放、错误回调、URI 切换、临时文件清理和不同尺寸的截图。实际执行结果与包体积见 `VERIFICATION.md`。
+设备测试使用自定义 Instrumentation，以输出 `ALL CHECKS PASSED` 为通过标志。覆盖无真实路径、无文件长度的管道型 `content://`，DOCX/PPTX/XLSX 渲染、双击缩放、错误回调、URI 切换、临时文件清理和不同尺寸的截图。
 
 XLSX 专项使用 `-e suite xlsx`，以 `ALL XLSX CHECKS PASSED` 为通过标志，覆盖管道 URI、表名顺序、切表与页码、双向滚动、缩放、快速换文件、合并区域、隐藏行列和有界文字布局缓存。
 
