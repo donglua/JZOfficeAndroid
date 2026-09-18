@@ -1,7 +1,7 @@
 pub mod support;
 
 use jz_office_core::{
-    model::{Document, ElementType},
+    model::{Document, ElementType, PathCommand},
     parse_reader,
 };
 use std::io::Cursor;
@@ -81,5 +81,39 @@ fn default_nonzero_and_unresolved_rounding_are_not_treated_as_square() -> TestRe
         custom.pages[0].elements[0].kind,
         ElementType::TEXT
     ));
+    Ok(())
+}
+
+#[test]
+fn custom_geometry_paths_are_preserved_as_local_commands() -> TestResult {
+    let mut parts = pptx::parts();
+    replace(
+        &mut parts,
+        "ppt/slideLayouts/slideLayout1.xml",
+        r#"
+<p:sldLayout xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" type="blank">
+<p:cSld><p:spTree><p:sp><p:nvSpPr><p:cNvPr id="10" name="Custom panel"/>
+<p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>
+<a:xfrm><a:off x="0" y="685800"/><a:ext cx="9144000" cy="4394200"/></a:xfrm>
+<a:custGeom><a:avLst/><a:gdLst/><a:pathLst><a:path w="100" h="50">
+<a:moveTo><a:pt x="0" y="0"/></a:moveTo><a:lnTo><a:pt x="100" y="0"/></a:lnTo>
+<a:cubicBezTo><a:pt x="100" y="20"/><a:pt x="80" y="50"/><a:pt x="0" y="50"/></a:cubicBezTo><a:close/>
+</a:path></a:pathLst></a:custGeom><a:solidFill><a:srgbClr val="112233"/></a:solidFill>
+<a:ln w="12700"><a:solidFill><a:srgbClr val="445566"/></a:solidFill></a:ln>
+</p:spPr></p:sp></p:spTree></p:cSld></p:sldLayout>"#,
+    );
+    let document = parse_reader(Cursor::new(archive(&parts)?))?;
+    let element = &document.pages[0].elements[0];
+    assert!(matches!(element.kind, ElementType::PATH));
+    assert_eq!(element.paths.len(), 1);
+    assert_eq!(element.paths[0].commands.len(), 4);
+    assert!(matches!(element.paths[0].commands[0], PathCommand::Move(_)));
+    assert!(matches!(
+        element.paths[0].commands[2],
+        PathCommand::Cubic(_)
+    ));
+    assert_eq!(element.fill, 0xff112233);
+    assert_eq!(element.stroke, 0xff445566);
     Ok(())
 }

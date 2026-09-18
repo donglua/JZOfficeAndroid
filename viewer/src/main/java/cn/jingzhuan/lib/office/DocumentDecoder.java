@@ -11,7 +11,7 @@ final class DocumentDecoder {
     static OfficeDocument decode(String json) throws IOException {
         try {
             JSONObject root = new JSONObject(json);
-            if (root.getInt("schemaVersion") != 4) throw new IOException("Unsupported core model version");
+            if (root.getInt("schemaVersion") != 5) throw new IOException("Unsupported core model version");
             OfficeDocument document = new OfficeDocument();
             document.kind = OfficeDocument.Kind.valueOf(root.getString("kind"));
             document.width = (float) root.getDouble("width");
@@ -148,6 +148,7 @@ final class DocumentDecoder {
         e.flipH = json.getBoolean("flipH"); e.flipV = json.getBoolean("flipV");
         e.fill = (int) json.getLong("fill"); e.stroke = (int) json.getLong("stroke");
         e.strokeWidth = (float) json.getDouble("strokeWidth");
+        e.fillGradient = gradient(json.optJSONObject("fillGradient"));
         e.verticalAlignment = OfficeDocument.VerticalAlignment.valueOf(json.getString("verticalAlignment"));
         JSONObject crop = json.optJSONObject("imageCrop");
         if (crop != null) {
@@ -163,6 +164,9 @@ final class DocumentDecoder {
         e.paragraphs.addAll(paragraphs(json.getJSONArray("paragraphs")));
         JSONArray widths = json.getJSONArray("columnWidths");
         for (int i = 0; i < widths.length(); i++) e.columnWidths.add((float) widths.getDouble(i));
+        JSONArray paths = json.getJSONArray("paths");
+        if (paths.length() > 32) throw new JSONException("Too many custom paths");
+        for (int i = 0; i < paths.length(); i++) e.paths.add(path(paths.getJSONObject(i)));
         JSONArray rows = json.getJSONArray("rows");
         for (int i = 0; i < rows.length(); i++) {
             List<List<OfficeDocument.Paragraph>> row = new ArrayList<>();
@@ -171,6 +175,55 @@ final class DocumentDecoder {
             e.rows.add(row);
         }
         return e;
+    }
+
+    private static OfficeDocument.Path path(JSONObject json) throws JSONException {
+        OfficeDocument.Path path = new OfficeDocument.Path();
+        path.fill = json.getBoolean("fill"); path.stroke = json.getBoolean("stroke");
+        JSONArray commands = json.getJSONArray("commands");
+        if (commands.length() == 0 || commands.length() > 10000) throw new JSONException("Invalid custom path commands");
+        for (int i = 0; i < commands.length(); i++) {
+            JSONObject source = commands.getJSONObject(i);
+            OfficeDocument.Command command = new OfficeDocument.Command();
+            command.op = source.getString("op");
+            JSONArray points = source.optJSONArray("points");
+            int expected = command.op.equals("MOVE") || command.op.equals("LINE") ? 2
+                : command.op.equals("QUAD") ? 4 : command.op.equals("CUBIC") ? 6 : 0;
+            if (expected == 0) {
+                if (!command.op.equals("CLOSE") || points != null) throw new JSONException("Invalid custom path command");
+            } else {
+                if (points == null || points.length() != expected) throw new JSONException("Invalid custom path points");
+                command.points = new float[expected];
+                for (int j = 0; j < expected; j++) {
+                    double value = points.getDouble(j);
+                    if (Double.isNaN(value) || Double.isInfinite(value) || Math.abs(value) > 100000) throw new JSONException("Invalid custom path coordinate");
+                    command.points[j] = (float) value;
+                }
+            }
+            path.commands.add(command);
+        }
+        return path;
+    }
+
+    private static OfficeDocument.GradientFill gradient(JSONObject json) throws JSONException {
+        if (json == null) return null;
+        JSONArray colors = json.getJSONArray("colors");
+        JSONArray positions = json.getJSONArray("positions");
+        if (colors.length() < 2 || colors.length() != positions.length() || colors.length() > 16) {
+            throw new JSONException("Invalid gradient stops");
+        }
+        OfficeDocument.GradientFill gradient = new OfficeDocument.GradientFill();
+        gradient.colors = new int[colors.length()]; gradient.positions = new float[positions.length()];
+        for (int i = 0; i < colors.length(); i++) {
+            gradient.colors[i] = (int) colors.getLong(i);
+            gradient.positions[i] = (float) positions.getDouble(i);
+            if (Float.isNaN(gradient.positions[i]) || gradient.positions[i] < 0 || gradient.positions[i] > 1 || i > 0 && gradient.positions[i] < gradient.positions[i - 1]) {
+                throw new JSONException("Invalid gradient position");
+            }
+        }
+        gradient.angle = (float) json.getDouble("angle"); gradient.scaled = json.getBoolean("scaled");
+        if (Float.isNaN(gradient.angle) || Float.isInfinite(gradient.angle)) throw new JSONException("Invalid gradient angle");
+        return gradient;
     }
 
     private static List<OfficeDocument.Paragraph> paragraphs(JSONArray array) throws JSONException {

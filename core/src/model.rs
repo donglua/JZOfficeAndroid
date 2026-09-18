@@ -17,6 +17,34 @@ pub enum ElementType {
     ELLIPSE,
     LINE,
     TABLE,
+    PATH,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "op", content = "points", rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum PathCommand {
+    Move([f32; 2]),
+    Line([f32; 2]),
+    Quad([f32; 4]),
+    Cubic([f32; 6]),
+    Close,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Path {
+    pub fill: bool,
+    pub stroke: bool,
+    pub commands: Vec<PathCommand>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GradientFill {
+    pub colors: Vec<u32>,
+    pub positions: Vec<f32>,
+    pub angle: f32,
+    pub scaled: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Default, PartialEq)]
@@ -61,7 +89,7 @@ pub struct Document {
 impl Document {
     pub fn new(kind: Kind) -> Self {
         Self {
-            schema_version: 4,
+            schema_version: 5,
             kind,
             width: 595.0,
             pages: Vec::new(),
@@ -110,6 +138,8 @@ pub struct Element {
     pub paragraphs: Vec<Paragraph>,
     pub rows: Vec<Vec<Vec<Paragraph>>>,
     pub column_widths: Vec<f32>,
+    pub paths: Vec<Path>,
+    pub fill_gradient: Option<GradientFill>,
 }
 
 impl Default for Element {
@@ -134,6 +164,8 @@ impl Default for Element {
             paragraphs: Vec::new(),
             rows: Vec::new(),
             column_widths: Vec::new(),
+            paths: Vec::new(),
+            fill_gradient: None,
         }
     }
 }

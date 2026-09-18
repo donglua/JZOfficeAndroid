@@ -130,6 +130,7 @@ impl Render<'_> {
                     .drawing(&chain, &mut element);
                     if supported
                         && (element.fill != 0
+                            || element.fill_gradient.is_some()
                             || element.stroke != 0
                             || shape.child("txBody").is_none())
                     {
@@ -199,6 +200,16 @@ impl Render<'_> {
 
     fn emit(&mut self, page: &mut Page, mut element: Element, transform: Transform) -> Result<()> {
         self.budget.object()?;
+        self.budget.path_commands += element
+            .paths
+            .iter()
+            .map(|path| path.commands.len())
+            .sum::<usize>();
+        if self.budget.path_commands > 100_000 {
+            return Err(crate::Error::Limit(
+                "PPTX exceeds 100000 custom path commands",
+            ));
+        }
         if !transform.accepts(&element) {
             self.doc
                 .warn("PPTX elements with excessive transformed bounds were omitted.");

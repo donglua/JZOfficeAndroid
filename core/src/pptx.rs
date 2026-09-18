@@ -2,8 +2,10 @@ mod chart;
 mod chart_data;
 mod colors;
 mod geometry;
+mod gradient;
 mod inheritance;
 mod parts;
+mod path;
 mod render;
 mod styles;
 mod table;
@@ -24,6 +26,7 @@ use render::Render;
 struct Budget {
     objects: usize,
     text_bytes: usize,
+    path_commands: usize,
 }
 
 impl Budget {

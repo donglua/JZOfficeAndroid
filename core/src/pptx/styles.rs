@@ -18,6 +18,7 @@ impl Styles<'_> {
             if let Some(style) = shape.child("style") {
                 if let Some(fill) = style.child("fillRef") {
                     element.fill = self.theme.fill_reference(fill, element.fill, self.doc);
+                    element.fill_gradient = None;
                 }
                 if let Some(line) = style.child("lnRef") {
                     self.line_reference(element, line);
@@ -30,18 +31,44 @@ impl Styles<'_> {
                 }
             }
             if let Some(properties) = shape.child("spPr") {
-                element.fill = self.theme.fill(properties, element.fill, self.doc);
+                if properties.child("noFill").is_some() || properties.child("solidFill").is_some() {
+                    element.fill_gradient = None;
+                    element.fill = self.theme.fill(properties, element.fill, self.doc);
+                } else if properties.child("gradFill").is_some() {
+                    element.fill_gradient = self.theme.gradient(properties, self.doc);
+                    if element.fill_gradient.is_none() {
+                        self.doc.warn(
+                            "PPTX unsupported or invalid shape gradient uses its fallback fill.",
+                        );
+                    }
+                } else if ["pattFill", "blipFill", "grpFill"]
+                    .iter()
+                    .any(|name| properties.child(name).is_some())
+                {
+                    element.fill_gradient = None;
+                    element.fill = self.theme.fill(properties, element.fill, self.doc);
+                }
                 if let Some(line) = properties.child("ln") {
                     self.line(element, line);
                 }
                 if let Some(geometry) = properties.child("prstGeom") {
+                    element.paths.clear();
                     preset = geometry.attr("prst");
                     if preset == "roundRect" && has_zero_corner_radius(geometry) {
                         preset = "rect";
                     }
                 }
                 if properties.child("custGeom").is_some() {
-                    preset = "custom";
+                    if let Some(paths) =
+                        super::path::parse(properties, [element.width, element.height])
+                    {
+                        element.paths = paths;
+                        preset = "path";
+                    } else {
+                        element.paths.clear();
+                        self.doc.warn("PPTX unsupported, invalid or excessive custom path was omitted; its text is retained.");
+                        preset = "custom";
+                    }
                 }
             }
         }
@@ -49,6 +76,7 @@ impl Styles<'_> {
             "rect" => ElementType::RECT,
             "ellipse" => ElementType::ELLIPSE,
             "line" => ElementType::LINE,
+            "path" => ElementType::PATH,
             _ => {
                 self.doc
                     .warn("PPTX complex geometry is omitted; its text is retained.");

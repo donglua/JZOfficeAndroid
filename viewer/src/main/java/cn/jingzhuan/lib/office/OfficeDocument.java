@@ -6,7 +6,7 @@ import java.util.List;
 /** Internal display model. Coordinates and font sizes are in points. */
 final class OfficeDocument {
     enum Kind { DOCX, PPTX, XLSX }
-    enum Type { TEXT, IMAGE, RECT, ELLIPSE, LINE, TABLE }
+    enum Type { TEXT, IMAGE, RECT, ELLIPSE, LINE, TABLE, PATH }
     enum VerticalAlignment { TOP, CENTER, BOTTOM }
     enum LineSpacingRule { AUTO, EXACT, AT_LEAST }
     Kind kind;
@@ -41,6 +41,25 @@ final class OfficeDocument {
         final List<Paragraph> paragraphs = new ArrayList<>();
         final List<List<List<Paragraph>>> rows = new ArrayList<>();
         final List<Float> columnWidths = new ArrayList<>();
+        final List<Path> paths = new ArrayList<>();
+        GradientFill fillGradient;
+    }
+
+    static final class Path {
+        boolean fill, stroke;
+        final List<Command> commands = new ArrayList<>();
+    }
+
+    static final class Command {
+        String op;
+        float[] points = new float[0];
+    }
+
+    static final class GradientFill {
+        int[] colors;
+        float[] positions;
+        float angle;
+        boolean scaled;
     }
 
     static final class ImageCrop {

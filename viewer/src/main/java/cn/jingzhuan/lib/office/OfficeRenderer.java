@@ -5,6 +5,9 @@ import android.graphics.Bitmap;
 import android.graphics.Paint;
 import android.graphics.Matrix;
 import android.graphics.RectF;
+import android.graphics.Path;
+import android.graphics.Shader;
+import android.graphics.LinearGradient;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -20,6 +23,8 @@ final class OfficeRenderer {
         float x, y, width, height;
         final Matrix transform = new Matrix();
         final RectF bounds = new RectF();
+        final List<Path> paths = new ArrayList<>();
+        Shader fillShader;
     }
 
     static final class Page {
@@ -62,6 +67,19 @@ final class OfficeRenderer {
         Element d = new Element(); d.source = source; d.x = source.x; d.y = source.y;
         d.width = flow ? Math.max(1, source.type == OfficeDocument.Type.TABLE && source.width > 0 ? Math.min(source.width, available) : available) : source.width;
         d.height = flow ? Math.max(1, source.height) : source.height;
+        for (OfficeDocument.Path sourcePath : source.paths) {
+            Path path = new Path();
+            for (OfficeDocument.Command command : sourcePath.commands) {
+                float[] p = command.points;
+                if ("MOVE".equals(command.op)) path.moveTo(p[0], p[1]);
+                else if ("LINE".equals(command.op)) path.lineTo(p[0], p[1]);
+                else if ("QUAD".equals(command.op)) path.quadTo(p[0], p[1], p[2], p[3]);
+                else if ("CUBIC".equals(command.op)) path.cubicTo(p[0], p[1], p[2], p[3], p[4], p[5]);
+                else if ("CLOSE".equals(command.op)) path.close();
+            }
+            d.paths.add(path);
+        }
+        if (source.fillGradient != null) d.fillShader = gradient(source.fillGradient, d.width, d.height);
         if (source.type == OfficeDocument.Type.IMAGE && flow) {
             float w = source.width > 0 ? source.width : available;
             float h = source.height > 0 ? source.height : 100;
@@ -101,6 +119,19 @@ final class OfficeRenderer {
         }
         position(d);
         return d;
+    }
+
+    private Shader gradient(OfficeDocument.GradientFill source, float width, float height) {
+        double radians = Math.toRadians(source.angle);
+        float dx = (float) Math.cos(radians), dy = (float) Math.sin(radians);
+        if (source.scaled) { dx *= width; dy *= height; }
+        float length = (float) Math.hypot(dx, dy);
+        if (length < 0.0001f) { dx = 1; dy = 0; length = 1; }
+        dx /= length; dy /= length;
+        float span = Math.abs(width * dx) + Math.abs(height * dy);
+        float cx = width / 2, cy = height / 2;
+        return new LinearGradient(cx - dx * span / 2, cy - dy * span / 2,
+            cx + dx * span / 2, cy + dy * span / 2, source.colors, source.positions, Shader.TileMode.CLAMP);
     }
 
     private void position(Element d) {
@@ -153,13 +184,28 @@ final class OfficeRenderer {
         OfficeDocument.Element e = d.source;
         canvas.save(); canvas.concat(d.transform);
         RectF rect = new RectF(0, 0, d.width, d.height);
-        paint.setStyle(Paint.Style.FILL); paint.setColor(e.fill);
-        if (e.type == OfficeDocument.Type.ELLIPSE) canvas.drawOval(rect, paint);
-        else if (e.type != OfficeDocument.Type.LINE) canvas.drawRect(rect, paint);
-        paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(e.strokeWidth); paint.setColor(e.stroke);
-        if (e.type == OfficeDocument.Type.ELLIPSE) canvas.drawOval(rect, paint);
-        else if (e.type == OfficeDocument.Type.LINE) canvas.drawLine(0, 0, e.width, e.height, paint);
-        else if (e.stroke != 0) canvas.drawRect(rect, paint);
+        if (e.type == OfficeDocument.Type.PATH) {
+            for (int i = 0; i < d.paths.size(); i++) {
+                OfficeDocument.Path sourcePath = e.paths.get(i);
+                if (sourcePath.fill) {
+                    paint.setStyle(Paint.Style.FILL); paint.setShader(d.fillShader); paint.setColor(d.fillShader == null ? e.fill : 0xffffffff);
+                    canvas.drawPath(d.paths.get(i), paint);
+                }
+                if (sourcePath.stroke && e.stroke != 0) {
+                    paint.setShader(null); paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(e.strokeWidth); paint.setColor(e.stroke);
+                    canvas.drawPath(d.paths.get(i), paint);
+                }
+            }
+            paint.setShader(null);
+        } else {
+            paint.setStyle(Paint.Style.FILL); paint.setShader(d.fillShader); paint.setColor(d.fillShader == null ? e.fill : 0xffffffff);
+            if (e.type == OfficeDocument.Type.ELLIPSE) canvas.drawOval(rect, paint);
+            else if (e.type != OfficeDocument.Type.LINE) canvas.drawRect(rect, paint);
+            paint.setShader(null); paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(e.strokeWidth); paint.setColor(e.stroke);
+            if (e.type == OfficeDocument.Type.ELLIPSE) canvas.drawOval(rect, paint);
+            else if (e.type == OfficeDocument.Type.LINE) canvas.drawLine(0, 0, e.width, e.height, paint);
+            else if (e.stroke != 0) canvas.drawRect(rect, paint);
+        }
         if (e.type == OfficeDocument.Type.TEXT) {
             RectF textBounds = new RectF(rect);
             for (OfficeTextLayout.Block block : d.texts) {

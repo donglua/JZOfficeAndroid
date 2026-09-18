@@ -20,7 +20,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class OfficeInstrumentation extends Instrumentation {
     private PreviewTestActivity activity;
     private final StringBuilder results = new StringBuilder();
-    private boolean layoutOnly, limitsOnly, imagesOnly, xlsxOnly, demoOnly, pptxOnly;
+    private boolean layoutOnly, limitsOnly, imagesOnly, xlsxOnly, demoOnly, pptxOnly, pathsOnly;
 
     @Override public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
@@ -30,11 +30,18 @@ public final class OfficeInstrumentation extends Instrumentation {
         xlsxOnly = arguments != null && "xlsx".equals(arguments.getString("suite"));
         demoOnly = arguments != null && "demo-xlsx".equals(arguments.getString("suite"));
         pptxOnly = arguments != null && "pptx".equals(arguments.getString("suite"));
+        pathsOnly = arguments != null && "paths".equals(arguments.getString("suite"));
         start();
     }
     @Override public void onStart() {
         Bundle output = new Bundle();
         try {
+            if (pathsOnly) {
+                results.append(PptxPathChecks.run(this));
+                output.putString("stream", "\n" + results + "ALL PATH CHECKS PASSED\n");
+                finish(Activity.RESULT_OK, output);
+                return;
+            }
             if (demoOnly) {
                 results.append(DemoSpreadsheetChecks.run(this));
                 output.putString("stream", "\n" + results + "ALL DEMO XLSX CHECKS PASSED\n");
@@ -59,6 +66,7 @@ public final class OfficeInstrumentation extends Instrumentation {
             check(activity != null, "Test activity starts");
             if (pptxOnly) {
                 results.append(PptxCompatibilityChecks.run(this, activity));
+                results.append(PptxPathChecks.run(this));
                 results.append(PptxChartChecks.run(this, activity));
                 results.append(PptxColorChecks.run(this, activity));
                 runOnMainSync(() -> activity.finish());

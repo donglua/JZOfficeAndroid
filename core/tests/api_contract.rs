@@ -54,8 +54,8 @@ fn output_schema_version_and_serialized_field_names_are_stable() -> TestResult {
 
         let json = serde_json::to_value(&document)?;
 
-        assert_eq!(document.schema_version, 4);
-        assert_eq!(json["schemaVersion"], 4);
+        assert_eq!(document.schema_version, 5);
+        assert_eq!(json["schemaVersion"], 5);
         assert!(json.get("schema_version").is_none());
         assert!(json["warnings"].is_array());
         assert_eq!(json["sheets"], serde_json::json!([]));
