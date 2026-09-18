@@ -20,6 +20,12 @@ import java.util.zip.ZipFile;
 final class OfficePackage implements Closeable {
     static final long MAX_INPUT = 64L * 1024 * 1024;
     static final long MAX_EXPANDED = 128L * 1024 * 1024;
+    static final int MAX_IMAGE_DIMENSION = 4096;
+    static final class Image {
+        final Bitmap bitmap;
+        final long nextPixels;
+        Image(Bitmap bitmap, long nextPixels) { this.bitmap = bitmap; this.nextPixels = nextPixels; }
+    }
     final File file;
     final ZipFile zip;
     private long readBytes;
@@ -92,18 +98,27 @@ final class OfficePackage implements Closeable {
         }
     }
 
-    Bitmap image(String part, long pixelLimit) throws IOException {
-        if (part == null) return null;
+    Image image(String part, long pixelLimit) throws IOException {
+        if (part == null) return new Image(null, Long.MAX_VALUE);
         byte[] bytes = read(part);
         BitmapFactory.Options options = new BitmapFactory.Options();
         options.inJustDecodeBounds = true;
         BitmapFactory.decodeByteArray(bytes, 0, bytes.length, options);
-        if (options.outWidth <= 0 || options.outHeight <= 0) return null;
+        if (options.outWidth <= 0 || options.outHeight <= 0) return new Image(null, Long.MAX_VALUE);
         options.inSampleSize = 1;
         while (sampledPixels(options) > pixelLimit
-                || (options.outWidth + (long) options.inSampleSize - 1) / options.inSampleSize > 1600
-                || (options.outHeight + (long) options.inSampleSize - 1) / options.inSampleSize > 1600) {
+                || (options.outWidth + (long) options.inSampleSize - 1) / options.inSampleSize > MAX_IMAGE_DIMENSION
+                || (options.outHeight + (long) options.inSampleSize - 1) / options.inSampleSize > MAX_IMAGE_DIMENSION) {
             if (options.inSampleSize >= 1 << 30) throw new IOException("Image dimensions exceed decode limit");
+            options.inSampleSize *= 2;
+        }
+        long nextPixels = Long.MAX_VALUE;
+        if (options.inSampleSize > 1) {
+            options.inSampleSize /= 2;
+            if ((options.outWidth + (long) options.inSampleSize - 1) / options.inSampleSize <= MAX_IMAGE_DIMENSION
+                    && (options.outHeight + (long) options.inSampleSize - 1) / options.inSampleSize <= MAX_IMAGE_DIMENSION) {
+                nextPixels = sampledPixels(options);
+            }
             options.inSampleSize *= 2;
         }
         options.inJustDecodeBounds = false;
@@ -114,7 +129,7 @@ final class OfficePackage implements Closeable {
             bitmap.recycle();
             throw new IOException("Decoded image exceeds its visible-area pixel budget");
         }
-        return bitmap;
+        return new Image(bitmap, bitmap == null ? Long.MAX_VALUE : nextPixels);
     }
 
     private static long sampledPixels(BitmapFactory.Options options) {

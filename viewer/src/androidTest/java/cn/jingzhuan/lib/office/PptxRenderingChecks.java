@@ -35,7 +35,7 @@ final class PptxRenderingChecks {
             check(document.kind == OfficeDocument.Kind.PPTX && document.pages.size() == 2, "Compatibility deck has two slides");
             for (OfficeDocument.Page page : document.pages) for (OfficeDocument.Element element : page.elements) {
                 if (element.image != null && !images.containsKey(element.image)) {
-                    Bitmap bitmap = source.image(element.image, OfficeImages.MAX_PIXELS);
+                    Bitmap bitmap = source.image(element.image, OfficeImages.MAX_PIXELS).bitmap;
                     check(bitmap != null, "Fixture image decodes: " + element.image);
                     images.put(element.image, bitmap);
                 }
@@ -83,9 +83,9 @@ final class PptxRenderingChecks {
         near(picture.height, 20, 0.01f, "Picture local height");
         OfficeRenderer renderer = new OfficeRenderer();
         renderer.layout(document);
-        check(renderer.visibleImages(210, 62, 230, 78).equals(Collections.singleton(picture.image)), "Moved picture enters viewport");
-        check(renderer.visibleImages(65, 32, 95, 48).isEmpty(), "Old local picture bounds are not visible");
-        check(renderer.visibleImages(0, 421, 720, 826).isEmpty(), "Second slide requests no picture");
+        check(renderer.visibleImages(210, 62, 230, 78, 0).equals(Collections.singleton(picture.image)), "Moved picture enters viewport");
+        check(renderer.visibleImages(65, 32, 95, 48, 0).isEmpty(), "Old local picture bounds are not visible");
+        check(renderer.visibleImages(0, 421, 720, 826, 0).isEmpty(), "Second slide requests no picture");
         Bitmap quadrants = quadrants();
         Bitmap frame = Bitmap.createBitmap(720, 405, Bitmap.Config.ARGB_8888);
         try {
@@ -198,10 +198,10 @@ final class PptxRenderingChecks {
         line.type = OfficeDocument.Type.LINE; line.x = 80; line.y = 40; line.width = 40; line.height = 0;
         line.rotation = 90; line.flipH = true; line.stroke = ORANGE; line.strokeWidth = 0.5f; page.elements.add(line);
         OfficeRenderer renderer = new OfficeRenderer(); renderer.layout(document);
-        check(renderer.visibleImages(25, 25, 49, 49).equals(Collections.singleton("quadrants")), "Fractional picture visible inside 50x50");
-        check(renderer.visibleImages(51, 0, 60, 50).isEmpty(), "Fractional picture excluded beyond x=50");
-        check(renderer.visibleImages(0, 51, 50, 60).isEmpty(), "Fractional picture excluded beyond y=50");
-        check(renderer.visibleImages(75, 0, 80, 50).isEmpty(), "Transparent default stroke does not expand image visibility");
+        check(renderer.visibleImages(25, 25, 49, 49, 0).equals(Collections.singleton("quadrants")), "Fractional picture visible inside 50x50");
+        check(renderer.visibleImages(51, 0, 60, 50, 0).isEmpty(), "Fractional picture excluded beyond x=50");
+        check(renderer.visibleImages(0, 51, 50, 60, 0).isEmpty(), "Fractional picture excluded beyond y=50");
+        check(renderer.visibleImages(75, 0, 80, 50, 0).isEmpty(), "Transparent default stroke does not expand image visibility");
         float[] endpoints = {0, 0, 40, 0};
         renderer.pages.get(0).elements.get(1).transform.mapPoints(endpoints);
         float[] expected = {100, 60, 100, 20};

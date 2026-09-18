@@ -47,7 +47,7 @@ final class RenderingChecks {
             List<OfficeDocument.Element> elements = new ArrayList<>(doc.blocks);
             for (OfficeDocument.Page page : doc.pages) elements.addAll(page.elements);
             for (OfficeDocument.Element element : elements) {
-                if (element.image != null && !images.containsKey(element.image)) images.put(element.image, pkg.image(element.image, 8_000_000));
+                if (element.image != null && !images.containsKey(element.image)) images.put(element.image, pkg.image(element.image, 8_000_000).bitmap);
             }
             return doc;
         }

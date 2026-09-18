@@ -5,6 +5,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
@@ -19,6 +20,7 @@ final class OfficeImages {
     static final long MAX_PIXELS = 8_000_000;
     final Map<String, Bitmap> bitmaps = new HashMap<>();
     final Set<String> wanted = new LinkedHashSet<>();
+    private final Map<String, Long> nextPixels = new HashMap<>();
     boolean loading;
     private final OfficePackage source;
     private final Runnable changed;
@@ -34,7 +36,7 @@ final class OfficeImages {
 
     void request(Set<String> parts) {
         if (closed || suspended) return;
-        if (!wanted.equals(parts)) {
+        if (!new ArrayList<>(wanted).equals(new ArrayList<>(parts))) {
             revision++;
             wanted.clear(); wanted.addAll(parts);
             long limit = pixelLimit();
@@ -43,7 +45,9 @@ final class OfficeImages {
             while (entries.hasNext()) {
                 Map.Entry<String, Bitmap> entry = entries.next();
                 Bitmap bitmap = entry.getValue();
-                if (!wanted.contains(entry.getKey()) || (bitmap != null && (long) bitmap.getWidth() * bitmap.getHeight() > limit)) entries.remove();
+                if (!wanted.contains(entry.getKey()) || pixels(bitmap) > limit) {
+                    nextPixels.remove(entry.getKey()); entries.remove();
+                }
             }
         }
         loadNext();
@@ -51,32 +55,47 @@ final class OfficeImages {
 
     private long pixelLimit() { return MAX_PIXELS / Math.max(1, wanted.size()); }
 
+    private static long pixels(Bitmap bitmap) { return bitmap == null ? 0 : (long) bitmap.getWidth() * bitmap.getHeight(); }
+
     private void loadNext() {
         if (closed || suspended || loading) return;
         String missing = null;
         for (String part : wanted) if (!bitmaps.containsKey(part)) { missing = part; break; }
+        long budget = pixelLimit();
+        if (missing == null) {
+            long available = MAX_PIXELS;
+            for (Bitmap bitmap : bitmaps.values()) available -= pixels(bitmap);
+            // Reuse the budget left by small images; keep the old pixels visible during an upgrade.
+            for (String part : wanted) {
+                Long needed = nextPixels.get(part);
+                long limit = available + pixels(bitmaps.get(part));
+                if (needed != null && needed <= limit) { missing = part; budget = limit; break; }
+            }
+        }
         if (missing == null) return;
         final String part = missing;
         final int token = revision;
-        final long limit = pixelLimit();
+        final long limit = budget;
         loading = true;
         worker.execute(() -> {
-            Bitmap bitmap = null;
+            OfficePackage.Image result = null;
             Exception error = null;
             try {
-                bitmap = source.image(part, limit);
-                if (bitmap == null) error = new IOException("Unsupported image format; a placeholder is shown");
+                result = source.image(part, limit);
+                if (result.bitmap == null) error = new IOException("Unsupported image format; a placeholder is shown");
             }
             catch (IOException | RuntimeException failure) { error = failure; }
             catch (OutOfMemoryError failure) { error = new IOException("Not enough memory to decode image", failure); }
-            final Bitmap decoded = bitmap;
+            final Bitmap decoded = result == null ? null : result.bitmap;
+            final long upgradePixels = result == null ? Long.MAX_VALUE : result.nextPixels;
             final Exception failure = error;
             main.post(() -> {
                 loading = false;
                 if (closed || suspended || token != revision) {
                     if (decoded != null) decoded.recycle();
                 } else {
-                    bitmaps.put(part, decoded);
+                    if (decoded != null || !bitmaps.containsKey(part)) bitmaps.put(part, decoded);
+                    nextPixels.put(part, upgradePixels);
                     changed.run();
                     if (failure != null) listener.onError(failure);
                 }
@@ -87,7 +106,7 @@ final class OfficeImages {
 
     void suspend() {
         suspended = true; revision++;
-        wanted.clear(); bitmaps.clear();
+        wanted.clear(); bitmaps.clear(); nextPixels.clear();
     }
 
     void resume() { suspended = false; }

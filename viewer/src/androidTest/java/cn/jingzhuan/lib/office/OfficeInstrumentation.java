@@ -76,7 +76,10 @@ public final class OfficeInstrumentation extends Instrumentation {
                 finish(Activity.RESULT_OK, output);
                 return;
             }
-            if (!layoutOnly) results.append(ImageMemoryChecks.run(this, activity));
+            if (!layoutOnly) {
+                results.append(ImageQualityChecks.run(this, activity));
+                results.append(ImageMemoryChecks.run(this, activity));
+            }
             if (imagesOnly) {
                 runOnMainSync(() -> activity.finish());
                 output.putString("stream", "\n" + results + "ALL IMAGE CHECKS PASSED\n");

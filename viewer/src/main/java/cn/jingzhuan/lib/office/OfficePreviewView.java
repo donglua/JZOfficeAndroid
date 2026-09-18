@@ -318,7 +318,7 @@ public final class OfficePreviewView extends View {
             sheetViewport.set(visibleLeft, visibleTop, visibleLeft + getWidth() / scale(), visibleBottom);
             sheetRenderer.draw(canvas, sheetViewport);
         } else {
-            images.request(renderer.visibleImages(visibleLeft, visibleTop, visibleLeft + getWidth() / scale(), visibleBottom));
+            images.request(renderer.visibleImages(visibleLeft, visibleTop, visibleLeft + getWidth() / scale(), visibleBottom, currentPage - 1));
             renderer.draw(canvas, visibleTop, visibleBottom, images.bitmaps);
         }
         canvas.restore();

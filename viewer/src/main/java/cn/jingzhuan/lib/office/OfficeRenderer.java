@@ -115,14 +115,18 @@ final class OfficeRenderer {
         d.transform.mapRect(d.bounds);
     }
 
-    Set<String> visibleImages(float left, float top, float right, float bottom) {
+    Set<String> visibleImages(float left, float top, float right, float bottom, int currentPage) {
         Set<String> parts = new LinkedHashSet<>();
-        for (Page page : pages) {
+        for (int index = -1; index < pages.size(); index++) {
+            if (index == currentPage || (index == -1 && (currentPage < 0 || currentPage >= pages.size()))) continue;
+            Page page = pages.get(index == -1 ? currentPage : index);
             if (page.y + page.height < top || page.y > bottom) continue;
             float clippedLeft = Math.max(0, left), clippedRight = Math.min(page.width, right);
             float clippedTop = Math.max(page.y, top), clippedBottom = Math.min(page.y + page.height, bottom);
             if (clippedLeft >= clippedRight || clippedTop >= clippedBottom) continue;
-            for (Element e : page.elements) {
+            // Frontmost images on the current slide get spare decode budget before backgrounds.
+            for (int element = page.elements.size() - 1; element >= 0; element--) {
+                Element e = page.elements.get(element);
                 if (e.source.image == null) continue;
                 RectF bounds = e.bounds;
                 if (bounds.right > clippedLeft && bounds.left < clippedRight

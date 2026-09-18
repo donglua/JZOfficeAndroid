@@ -4,6 +4,7 @@ import android.app.Instrumentation;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Paint;
 import android.net.Uri;
 import android.os.Looper;
 import android.os.SystemClock;
@@ -31,7 +32,7 @@ import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
 final class ImageMemoryChecks {
-    private static final int PAGE_COUNT = 16, IMAGE_SIZE = 1000, VIEW_SIZE = 600;
+    private static final int PAGE_COUNT = 16, IMAGE_SIZE = 2000, VIEW_SIZE = 600;
     private static final int NAVIGATION_ROUNDS = 9;
     private static final long MAX_PIXELS = 8_000_000L, MAX_EXPANDED = 128L * 1024 * 1024;
     private static final long TIMEOUT_MS = 20_000;
@@ -91,13 +92,19 @@ final class ImageMemoryChecks {
             Uri originalUri = Uri.fromFile(deck), replacementUri = Uri.fromFile(replacement);
             Load original = new Load();
             onMain(() -> view.open(originalUri, original));
-            original.awaitLoaded(PAGE_COUNT, "16 distinct 1000x1000 images must reach onLoaded");
+            original.awaitLoaded(PAGE_COUNT, "16 distinct 2000x2000 images must reach onLoaded");
             Bitmap first = awaitPage(1, false);
+            int contrast = clarity();
+            check(first.getWidth() == IMAGE_SIZE && first.getHeight() == IMAGE_SIZE,
+                "High-resolution PPTX image retains source pixels");
+            check(contrast > 200, "Zoomed one-pixel image detail retains contrast: " + contrast);
+            first = awaitPage(1, false);
             Object attachedImages = images();
             onMain(() -> activity.setContentView(new View(activity)));
             Snapshot detached = snapshot(attachedImages);
             check(detached.bitmaps.isEmpty() && detached.wanted.isEmpty() && !detached.loading,
-                "Detaching suspends and releases the image cache");
+                "Detaching suspends and releases the image cache: cached=" + detached.bitmaps.keySet()
+                    + ", wanted=" + detached.wanted + ", loading=" + detached.loading);
             onMain(() -> {
                 activity.setContentView(view, new ViewGroup.LayoutParams(VIEW_SIZE, VIEW_SIZE));
                 view.measure(exact(VIEW_SIZE), exact(VIEW_SIZE));
@@ -158,6 +165,8 @@ final class ImageMemoryChecks {
             check(original.callbacks.get() == 1 && stale.callbacks.get() == 0 && current.callbacks.get() == 1,
                 "Replacement and image cancellation do not deliver late document callbacks");
             return "IMAGE MEMORY CHECKS\n"
+                + "PASS 2000x2000 source pixels and 4x raster detail contrast=" + contrast + "\n"
+                + "SCREENSHOTS image-clarity-fit.png, image-clarity-zoom.png\n"
                 + "PASS 16-image document delivers UI onLoaded; visible images render and offscreen entries are evicted\n"
                 + "PASS jump, drag, return and " + NAVIGATION_ROUNDS + " full passes; logical image reads=" + logicalReads
                 + ", peak cached pixels=" + peakPixels + "\n"
@@ -185,6 +194,33 @@ final class ImageMemoryChecks {
 
     private void jump(int page) throws Exception {
         onMain(() -> view.jumpToPage(page));
+    }
+
+    private int clarity() throws Exception {
+        AtomicInteger contrast = new AtomicInteger();
+        onMain(() -> {
+            saveFrame("image-clarity-fit");
+            view.setZoom(4); view.jumpToPage(1); draw();
+            saveFrame("image-clarity-zoom");
+            float density = view.getResources().getDisplayMetrics().density;
+            float imageWidth = (VIEW_SIZE - 24 * density) * 4;
+            int y = Math.round(12 * density + 100f / IMAGE_SIZE * imageWidth * 1.5f);
+            int min = 255, max = 0;
+            for (int x = (int) Math.ceil(64f / IMAGE_SIZE * imageWidth);
+                    x < 240f / IMAGE_SIZE * imageWidth; x++) {
+                int value = Color.red(frame.getPixel(x, y));
+                min = Math.min(min, value); max = Math.max(max, value);
+            }
+            contrast.set(max - min);
+            view.resetZoom(); view.jumpToPage(1); draw();
+        });
+        return contrast.get();
+    }
+
+    private void saveFrame(String name) throws IOException {
+        try (FileOutputStream output = new FileOutputStream(new File(activity.getFilesDir(), name + ".png"))) {
+            check(frame.compress(Bitmap.CompressFormat.PNG, 100, output), "Save " + name);
+        }
     }
 
     private Bitmap awaitPage(int page, boolean alternate) throws Exception {
@@ -380,6 +416,14 @@ final class ImageMemoryChecks {
                 xml(zip, "ppt/slides/_rels/slide" + page + ".xml.rels",
                     relationships(relation("rImage", "image", "../media/image" + page + ".png")));
                 bitmap.eraseColor(color(page, alternate));
+                if (page == 1) {
+                    Canvas detail = new Canvas(bitmap);
+                    Paint stripe = new Paint();
+                    for (int x = 32; x < 256; x++) {
+                        stripe.setColor(x % 2 == 0 ? Color.BLACK : Color.WHITE);
+                        detail.drawRect(x, 32, x + 1, 256, stripe);
+                    }
+                }
                 zip.putNextEntry(new ZipEntry(imagePath(page)));
                 if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, zip)) throw new IOException("Cannot encode fixture image");
                 // PNG decoders ignore trailing bytes; package reads still account for a full MiB per visit.
@@ -401,7 +445,7 @@ final class ImageMemoryChecks {
             Enumeration<? extends ZipEntry> entries = zip.entries();
             while (entries.hasMoreElements()) expanded += entries.nextElement().getSize();
             check(expanded <= MAX_EXPANDED, "Unique expanded fixture data fits within 128 MiB");
-            check((long) PAGE_COUNT * IMAGE_SIZE * IMAGE_SIZE > MAX_PIXELS, "Fixture exceeds the former aggregate pixel budget");
+            check((long) PAGE_COUNT * IMAGE_SIZE * IMAGE_SIZE > MAX_PIXELS, "Fixture exceeds the aggregate pixel budget");
             for (int page = 1; page <= PAGE_COUNT; page++) {
                 imageBytes[page - 1] = zip.getEntry(imagePath(page)).getSize();
                 check(imageBytes[page - 1] > 1024 * 1024, "Each PNG has one MiB of trailing padding");
