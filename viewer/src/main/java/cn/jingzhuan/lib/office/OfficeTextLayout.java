@@ -10,6 +10,7 @@ import android.text.TextPaint;
 import android.text.style.AbsoluteSizeSpan;
 import android.text.style.ForegroundColorSpan;
 import android.text.style.LineHeightSpan;
+import android.text.style.MetricAffectingSpan;
 import android.text.style.StyleSpan;
 import android.text.style.UnderlineSpan;
 import java.util.List;
@@ -20,12 +21,12 @@ final class OfficeTextLayout {
         float x, y;
     }
 
-    static float append(List<OfficeDocument.Paragraph> paragraphs, float x, float y, float width, List<Block> out) {
+    static float append(List<OfficeDocument.Paragraph> paragraphs, float x, float y, float width, List<Block> out, boolean pptx) {
         for (OfficeDocument.Paragraph paragraph : paragraphs) {
             y += Math.max(0, paragraph.before);
             Block block = new Block();
             block.x = x; block.y = y;
-            block.layout = paragraph(paragraph, width);
+            block.layout = paragraph(paragraph, width, pptx);
             out.add(block);
             y += block.layout.getHeight() + Math.max(0, paragraph.after);
         }
@@ -33,6 +34,10 @@ final class OfficeTextLayout {
     }
 
     static StaticLayout paragraph(OfficeDocument.Paragraph paragraph, float width) {
+        return paragraph(paragraph, width, false);
+    }
+
+    private static StaticLayout paragraph(OfficeDocument.Paragraph paragraph, float width, boolean pptx) {
         SpannableStringBuilder text = new SpannableStringBuilder(paragraph.bullet);
         for (OfficeDocument.Run run : paragraph.runs) {
             int start = text.length(); text.append(run.text);
@@ -41,7 +46,8 @@ final class OfficeTextLayout {
             text.setSpan(new AbsoluteSizeSpan(Math.max(1, Math.round(run.size))), start, text.length(), flags);
             text.setSpan(new ForegroundColorSpan(run.color), start, text.length(), flags);
             int style = (run.bold ? Typeface.BOLD : 0) | (run.italic ? Typeface.ITALIC : 0);
-            if (style != 0) text.setSpan(new StyleSpan(style), start, text.length(), flags);
+            if (!run.fontFace.isEmpty()) text.setSpan(new FontFace(run.fontFace, style), start, text.length(), flags);
+            else if (style != 0) text.setSpan(new StyleSpan(style), start, text.length(), flags);
             if (run.underline) text.setSpan(new UnderlineSpan(), start, text.length(), flags);
         }
         if (text.length() == 0) text.append(" ");
@@ -58,13 +64,56 @@ final class OfficeTextLayout {
             .setAlignment(align).setIncludePad(false)
             .setIndents(new int[] {first, rest}, new int[] {right});
         if (paragraph.lineSpacingRule == OfficeDocument.LineSpacingRule.AUTO) {
-            builder.setLineSpacing(0, paragraph.lineSpacing);
+            if (pptx && paragraph.lineSpacing != 1) {
+                text.setSpan(new PptxLineHeight(font.getTextSize(), paragraph.lineSpacing),
+                    0, text.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            } else builder.setLineSpacing(0, paragraph.lineSpacing);
         } else {
             text.setSpan(new FixedLineHeight(paragraph.lineSpacing,
                 paragraph.lineSpacingRule == OfficeDocument.LineSpacingRule.EXACT),
                 0, text.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         }
         return builder.build();
+    }
+
+    private static final class FontFace extends MetricAffectingSpan {
+        private final Typeface typeface;
+
+        FontFace(String face, int style) {
+            if ("Impact".equalsIgnoreCase(face)) {
+                face = "sans-serif-condensed";
+                style |= Typeface.BOLD;
+            } else if ("思源黑体 CN Light".equals(face) || "Source Han Sans CN Light".equals(face)
+                || "Source Han Sans SC Light".equals(face) || "Noto Sans CJK SC Light".equals(face)) {
+                face = "sans-serif-light";
+            }
+            typeface = Typeface.create(face, style);
+        }
+
+        @Override public void updateMeasureState(TextPaint paint) { paint.setTypeface(typeface); }
+        @Override public void updateDrawState(TextPaint paint) { paint.setTypeface(typeface); }
+    }
+
+    private static final class PptxLineHeight implements LineHeightSpan {
+        private final float baseSize, spacing;
+
+        PptxLineHeight(float baseSize, float spacing) { this.baseSize = baseSize; this.spacing = spacing; }
+
+        @Override public void chooseHeight(CharSequence text, int start, int end, int spanStartY, int lineTop, Paint.FontMetricsInt metrics) {
+            float size = 0;
+            if (text instanceof Spanned) {
+                for (AbsoluteSizeSpan span : ((Spanned) text).getSpans(start, end, AbsoluteSizeSpan.class)) {
+                    size = Math.max(size, span.getSize());
+                }
+            }
+            if (size == 0) size = baseSize;
+            int natural = metrics.descent - metrics.ascent;
+            // DrawingML leading belongs to the whole line box, including a single line.
+            int extra = Math.max(1, Math.round(Math.max(natural, size * 1.2f) * spacing)) - natural;
+            metrics.ascent -= extra - extra / 2;
+            metrics.descent += extra / 2;
+            metrics.top = metrics.ascent; metrics.bottom = metrics.descent;
+        }
     }
 
     private static final class FixedLineHeight implements LineHeightSpan {

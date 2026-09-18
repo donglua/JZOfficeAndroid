@@ -15,6 +15,7 @@ fn main() -> TestResult {
         ("pptx-compat.pptx", support::pptx_compat::parts()),
         ("pptx-charts.pptx", support::pptx_charts::parts()),
         ("pptx-colors.pptx", support::pptx_colors::parts()),
+        ("pptx-typography.pptx", support::pptx_typography::parts()),
         ("sample.xlsx", support::xlsx::parts()),
     ] {
         let path = destination.join(name);

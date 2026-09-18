@@ -190,6 +190,7 @@ final class DocumentDecoder {
                 JSONObject r = runs.getJSONObject(j);
                 OfficeDocument.Run run = new OfficeDocument.Run();
                 run.text = r.getString("text"); run.size = (float) r.getDouble("size");
+                run.fontFace = r.optString("fontFace", "");
                 run.bold = r.getBoolean("bold"); run.italic = r.getBoolean("italic");
                 run.underline = r.getBoolean("underline"); run.color = (int) r.getLong("color");
                 paragraph.runs.add(run);

@@ -29,6 +29,7 @@ final class PptxRenderingChecks {
         Uri uri = Uri.parse("content://" + context.getPackageName() + ".fixtures/" + FIXTURE);
         Map<String, Bitmap> images = new HashMap<>();
         StringBuilder log = new StringBuilder("PPTX COMPATIBILITY CHECKS\n");
+        log.append(PptxTextChecks.run(instrumentation));
         try (OfficePackage source = OfficePackage.open(context, uri)) {
             String json = NativeCore.parse(source.file.getAbsolutePath());
             OfficeDocument document = DocumentDecoder.decode(json);

@@ -78,7 +78,7 @@ final class OfficeRenderer {
                 for (int c = 0; c < cols; c++) {
                     float w = source.columnWidths.size() == cols && total > 0 ? d.width * Math.max(1, source.columnWidths.get(c)) / total : d.width / Math.max(1, cols);
                     List<OfficeDocument.Paragraph> cell = c < row.size() ? row.get(c) : Collections.emptyList();
-                    rowHeight = Math.max(rowHeight, OfficeTextLayout.append(cell, x + 5, y + 5, Math.max(1, w - 10), d.texts) - y + 5);
+                    rowHeight = Math.max(rowHeight, OfficeTextLayout.append(cell, x + 5, y + 5, Math.max(1, w - 10), d.texts, !flow) - y + 5);
                     d.cells.add(new RectF(x, y, x + w, y)); x += w;
                 }
                 for (int i = first; i < d.cells.size(); i++) d.cells.get(i).bottom = y + rowHeight;
@@ -89,7 +89,7 @@ final class OfficeRenderer {
         } else if (!source.paragraphs.isEmpty()) {
             float padding = flow ? 0 : Math.max(0, source.padding);
             float textHeight = OfficeTextLayout.append(source.paragraphs, padding, padding,
-                Math.max(1, d.width - 2 * padding), d.texts) + padding;
+                Math.max(1, d.width - 2 * padding), d.texts, !flow) + padding;
             if (flow) d.height = Math.max(1, textHeight);
             else {
                 if (textHeight > d.height + 1) document.warn("Text exceeds its slide box and is clipped");

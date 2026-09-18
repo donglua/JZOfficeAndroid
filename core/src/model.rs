@@ -173,6 +173,8 @@ impl Default for Paragraph {
 #[derive(Debug, Clone, Serialize)]
 pub struct Run {
     pub text: String,
+    #[serde(rename = "fontFace", skip_serializing_if = "String::is_empty")]
+    pub font_face: String,
     pub size: f32,
     pub bold: bool,
     pub italic: bool,
@@ -184,6 +186,7 @@ impl Default for Run {
     fn default() -> Self {
         Self {
             text: String::new(),
+            font_face: String::new(),
             size: 12.0,
             bold: false,
             italic: false,

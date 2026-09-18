@@ -8,4 +8,5 @@ pub mod pptx_colors;
 pub mod pptx_compat;
 mod pptx_shapes;
 mod pptx_theme;
+pub mod pptx_typography;
 pub mod xlsx;

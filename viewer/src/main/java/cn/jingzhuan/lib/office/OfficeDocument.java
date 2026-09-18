@@ -59,13 +59,14 @@ final class OfficeDocument {
 
     static final class Run {
         String text = "";
+        String fontFace = "";
         float size = 12;
         boolean bold, italic, underline;
         int color = 0xff202124;
 
         Run copy() {
             Run r = new Run();
-            r.text = text; r.size = size; r.bold = bold;
+            r.text = text; r.fontFace = fontFace; r.size = size; r.bold = bold;
             r.italic = italic; r.underline = underline; r.color = color;
             return r;
         }

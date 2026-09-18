@@ -28,12 +28,19 @@ impl TextStyle<'_> {
             }
         }
         run.color = self.theme.text_fill(properties, run.color, self.doc);
+        if let Some(face) = properties
+            .child("latin")
+            .map(|font| font.attr("typeface"))
+            .filter(|face| !face.is_empty())
+        {
+            run.font_face = face.to_owned();
+        }
         if ["latin", "ea", "cs", "sym"]
             .iter()
             .any(|n| properties.child(n).is_some())
         {
             self.doc
-                .warn("PPTX font faces use the viewer's default typeface.");
+                .warn("PPTX font faces use viewer system font fallbacks.");
         }
         if number(properties.attr("baseline"), 0.0) != 0.0
             || !matches!(properties.attr("strike"), "" | "noStrike")
