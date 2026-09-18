@@ -20,6 +20,7 @@ final class OfficeImages {
     static final long MAX_PIXELS = 8_000_000;
     final Map<String, Bitmap> bitmaps = new HashMap<>();
     final Set<String> wanted = new LinkedHashSet<>();
+    private final Set<String> resizePending = new LinkedHashSet<>();
     private final Map<String, Long> nextPixels = new HashMap<>();
     boolean loading;
     private final OfficePackage source;
@@ -44,10 +45,10 @@ final class OfficeImages {
             Iterator<Map.Entry<String, Bitmap>> entries = bitmaps.entrySet().iterator();
             while (entries.hasNext()) {
                 Map.Entry<String, Bitmap> entry = entries.next();
-                Bitmap bitmap = entry.getValue();
-                if (!wanted.contains(entry.getKey()) || pixels(bitmap) > limit) {
-                    nextPixels.remove(entry.getKey()); entries.remove();
-                }
+                if (!wanted.contains(entry.getKey())) {
+                    nextPixels.remove(entry.getKey()); resizePending.remove(entry.getKey()); entries.remove();
+                } else if (pixels(entry.getValue()) > limit) resizePending.add(entry.getKey());
+                else resizePending.remove(entry.getKey());
             }
         }
         loadNext();
@@ -60,11 +61,15 @@ final class OfficeImages {
     private void loadNext() {
         if (closed || suspended || loading) return;
         String missing = null;
-        for (String part : wanted) if (!bitmaps.containsKey(part)) { missing = part; break; }
         long budget = pixelLimit();
+        long available = MAX_PIXELS;
+        for (Bitmap bitmap : bitmaps.values()) available -= pixels(bitmap);
+        // Make room before loading new entries, while keeping each old bitmap until replacement.
+        for (String part : wanted) if (resizePending.contains(part)) { missing = part; break; }
+        if (missing == null) for (String part : wanted) {
+            if (!bitmaps.containsKey(part)) { missing = part; break; }
+        }
         if (missing == null) {
-            long available = MAX_PIXELS;
-            for (Bitmap bitmap : bitmaps.values()) available -= pixels(bitmap);
             // Reuse the budget left by small images; keep the old pixels visible during an upgrade.
             for (String part : wanted) {
                 Long needed = nextPixels.get(part);
@@ -73,6 +78,8 @@ final class OfficeImages {
             }
         }
         if (missing == null) return;
+        budget = Math.min(budget, available + pixels(bitmaps.get(missing)));
+        if (budget <= 0) return;
         final String part = missing;
         final int token = revision;
         final long limit = budget;
@@ -95,6 +102,7 @@ final class OfficeImages {
                     if (decoded != null) decoded.recycle();
                 } else {
                     if (decoded != null || !bitmaps.containsKey(part)) bitmaps.put(part, decoded);
+                    resizePending.remove(part);
                     nextPixels.put(part, upgradePixels);
                     changed.run();
                     if (failure != null) listener.onError(failure);
@@ -106,7 +114,7 @@ final class OfficeImages {
 
     void suspend() {
         suspended = true; revision++;
-        wanted.clear(); bitmaps.clear(); nextPixels.clear();
+        wanted.clear(); bitmaps.clear(); resizePending.clear(); nextPixels.clear();
     }
 
     void resume() { suspended = false; }

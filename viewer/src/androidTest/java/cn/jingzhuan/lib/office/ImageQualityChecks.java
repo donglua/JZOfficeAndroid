@@ -21,6 +21,7 @@ final class ImageQualityChecks {
     private static final long MAX_PIXELS = 8_000_000L, TIMEOUT_MS = 15_000;
     private static final String BIG_1 = "ppt/media/big1.png", BIG_2 = "ppt/media/big2.png", BIG_3 = "ppt/media/big3.png";
     private static final String LOGO_1 = "ppt/media/logo1.png", LOGO_2 = "ppt/media/logo2.png";
+    private static final String NEAR_LIMIT = "ppt/media/near-limit.png";
 
     static String run(OfficeInstrumentation instrumentation, PreviewTestActivity activity) throws Exception {
         check(Looper.myLooper() != Looper.getMainLooper(), "Run image quality checks on the instrumentation thread");
@@ -40,6 +41,9 @@ final class ImageQualityChecks {
             State one = request(instrumentation, images, error, set(BIG_1, LOGO_1, LOGO_2));
             check(one.full(BIG_1) && one.size(LOGO_1) == LOGO && one.size(LOGO_2) == LOGO, "Single large image and logos keep source resolution");
 
+            State transition = transition(instrumentation, images, error, set(BIG_1, BIG_2, BIG_3, LOGO_1, LOGO_2));
+            check(transition.sizes.containsKey(BIG_1), "Visible bitmap remains published while a lower-budget replacement decodes");
+
             State many = request(instrumentation, images, error, set(BIG_1, BIG_2, BIG_3, LOGO_1, LOGO_2));
             check(many.full(BIG_1), "First large image keeps source resolution when total source pixels exceed the budget");
             String sampled = sampled(many, BIG_2, BIG_3);
@@ -53,6 +57,11 @@ final class ImageQualityChecks {
             check(reorderTarget != null, "Baseline full-set request leaves a lower-priority image sampled");
             check(request(instrumentation, images, error, reordered(reorderTarget)).full(reorderTarget), "Reordering the same image set upgrades the new first image");
 
+            request(instrumentation, images, error, set(NEAR_LIMIT));
+            State crowded = transition(instrumentation, images, error, set(NEAR_LIMIT, BIG_2, BIG_3));
+            check(crowded.sizes.containsKey(NEAR_LIMIT), "Near-limit visible bitmap survives an increased visible image count");
+            request(instrumentation, images, error, set(NEAR_LIMIT, BIG_2, BIG_3));
+
             instrumentation.runOnMainChecked(() -> {
                 images.suspend();
                 State suspended = snapshot(images);
@@ -62,6 +71,7 @@ final class ImageQualityChecks {
             State resumed = request(instrumentation, images, error, set(BIG_3, LOGO_1, LOGO_2));
             check(resumed.full(BIG_3) && resumed.size(LOGO_1) == LOGO && resumed.size(LOGO_2) == LOGO, "Resume allows images to reload at source resolution");
             return "IMAGE QUALITY CHECKS\n"
+                + "PASS visible bitmaps survive budget transitions and new entries stay within the 8M cache budget\n"
                 + "PASS bounded cache preserves priority image quality, upgrades with spare budget, honors reorder priority, and reloads after suspend\n"
                 + "IMAGE QUALITY CHECKS PASSED\n";
         } finally {
@@ -74,7 +84,7 @@ final class ImageQualityChecks {
     }
 
     private static State request(OfficeInstrumentation instrumentation, OfficeImages images, AtomicReference<Exception> error, LinkedHashSet<String> parts) throws Exception {
-        instrumentation.runOnMainChecked(() -> { error.set(null); images.request(parts); });
+        instrumentation.runOnMainChecked(() -> images.request(parts));
         long deadline = SystemClock.uptimeMillis() + TIMEOUT_MS;
         AtomicReference<State> ready = new AtomicReference<>();
         while (SystemClock.uptimeMillis() < deadline) {
@@ -89,6 +99,12 @@ final class ImageQualityChecks {
             SystemClock.sleep(20);
         }
         throw new AssertionError("Timed out waiting for images: " + parts);
+    }
+
+    private static State transition(OfficeInstrumentation instrumentation, OfficeImages images, AtomicReference<Exception> error, LinkedHashSet<String> parts) throws Exception {
+        AtomicReference<State> state = new AtomicReference<>();
+        instrumentation.runOnMainChecked(() -> { images.request(parts); state.set(snapshot(images)); });
+        return state.get();
     }
 
     private static State snapshot(OfficeImages images) {
@@ -134,6 +150,7 @@ final class ImageQualityChecks {
             image(zip, BIG_3, BIG, Color.BLUE);
             image(zip, LOGO_1, LOGO, Color.YELLOW);
             image(zip, LOGO_2, LOGO, Color.CYAN);
+            image(zip, NEAR_LIMIT, 2800, Color.MAGENTA);
             complete = true;
         } finally {
             if (!complete) file.delete();
