@@ -96,7 +96,7 @@ PPTX 组合保留子元素顺序，支持嵌套位置、非等比缩放和旋转
 
 PPTX 文本应用继承后的 `lnSpc`、`marL`、`marR` 和 `indent`。`normAutofit` 使用文件保存的字号比例及百分比行距缩减值，`noAutofit` 和 `spAutoFit` 可清除继承的缩字设置；不根据 Android 字体重新求解自动缩字或扩大文本框。段前/段后百分比间距、自定义制表位和 RTL 仍简化处理。相关语义参见 [DrawingML 组合变换](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.transformgroup)和 [NormalAutoFit](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.drawing.normalautofit)。
 
-PPTX 渐变文字采用色带中点的纯色近似，并返回提示；按色标位置插值，保留主题色映射和透明度。颜色支持 `lumMod`、`lumOff` 亮度变换，直接纯色或无填充可覆盖继承的渐变文字样式。文字未实现真实渐变着色或 WordArt 特效，不增加字体或渲染依赖。图形的直接线性渐变填充保留色标、主题色和透明度；路径渐变与主题样式引用的渐变仍不支持，平铺和独立旋转简化处理。
+PPTX 渐变文字采用色带中点的纯色近似，并返回提示；按色标位置插值，保留主题色映射和透明度。颜色支持 `lumMod`、`lumOff` 亮度变换，直接纯色或无填充可覆盖继承的渐变文字样式。文字未实现真实渐变着色或 WordArt 特效，不增加字体或渲染依赖。图形的直接线性渐变填充，以及幻灯片、版式和母版的直接线性渐变背景，均保留色标、主题色和透明度；路径渐变与主题样式引用的渐变仍不支持，平铺和独立旋转简化处理。
 
 PPTX 圆角矩形 `roundRect` 在圆角调整值明确为 `adj = val 0` 时，按等效普通矩形绘制，保留母版/版式底板的填充、描边和层级顺序。默认圆角、非零圆角和其他预设复杂几何仍不支持。自定义几何支持数值坐标的移动、直线、二次及三次贝塞尔曲线、闭合路径，并保留子路径顺序与逐路径填充/描边开关；弧线、引导公式和特殊填充模式仍省略图形并返回提示，保留文字。
 

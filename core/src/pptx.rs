@@ -123,7 +123,7 @@ pub(crate) fn parse(pkg: &mut Package, main_part: &str) -> Result<Document> {
                 layout_root.unwrap_or(&slide.root),
                 master_root.unwrap_or(&slide.root),
             ],
-        );
+        )?;
         if flag(slide.root.attr("showMasterSp"), true) {
             if layout_root.is_none_or(|n| flag(n.attr("showMasterSp"), true)) {
                 if let Some(part) = master.as_deref() {

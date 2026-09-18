@@ -28,20 +28,32 @@ struct ShapeTree<'a> {
 }
 
 impl Render<'_> {
-    pub fn background(&mut self, page: &mut Page, sources: [&Node; 3]) {
+    pub fn background(&mut self, page: &mut Page, sources: [&Node; 3]) -> Result<()> {
         for root in sources {
             let Some(bg) = root.child("cSld").and_then(|n| n.child("bg")) else {
                 continue;
             };
             if let Some(properties) = bg.child("bgPr") {
-                page.background = self.theme.fill(properties, page.background, self.doc);
+                if let Some(gradient) = self.theme.gradient(properties, self.doc) {
+                    let background = Element {
+                        kind: ElementType::RECT,
+                        width: page.width,
+                        height: page.height,
+                        fill_gradient: Some(gradient),
+                        ..Element::default()
+                    };
+                    self.emit(page, background, Transform::IDENTITY)?;
+                } else {
+                    page.background = self.theme.fill(properties, page.background, self.doc);
+                }
             } else if let Some(reference) = bg.child("bgRef") {
                 page.background = self
                     .theme
                     .fill_reference(reference, page.background, self.doc);
             }
-            return;
+            return Ok(());
         }
+        Ok(())
     }
 
     pub fn tree(&mut self, part: &Part, inherited: bool, page: &mut Page) -> Result<()> {

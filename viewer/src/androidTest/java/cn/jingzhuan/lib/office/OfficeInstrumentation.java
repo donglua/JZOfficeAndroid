@@ -20,7 +20,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class OfficeInstrumentation extends Instrumentation {
     private PreviewTestActivity activity;
     private final StringBuilder results = new StringBuilder();
-    private boolean layoutOnly, limitsOnly, imagesOnly, xlsxOnly, demoOnly, pptxOnly, pathsOnly;
+    private boolean layoutOnly, limitsOnly, imagesOnly, xlsxOnly, demoOnly, pptxOnly, pathsOnly, backgroundsOnly;
 
     @Override public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
@@ -31,11 +31,18 @@ public final class OfficeInstrumentation extends Instrumentation {
         demoOnly = arguments != null && "demo-xlsx".equals(arguments.getString("suite"));
         pptxOnly = arguments != null && "pptx".equals(arguments.getString("suite"));
         pathsOnly = arguments != null && "paths".equals(arguments.getString("suite"));
+        backgroundsOnly = arguments != null && "backgrounds".equals(arguments.getString("suite"));
         start();
     }
     @Override public void onStart() {
         Bundle output = new Bundle();
         try {
+            if (backgroundsOnly) {
+                results.append(PptxBackgroundChecks.run(this));
+                output.putString("stream", "\n" + results + "ALL BACKGROUND CHECKS PASSED\n");
+                finish(Activity.RESULT_OK, output);
+                return;
+            }
             if (pathsOnly) {
                 results.append(PptxPathChecks.run(this));
                 output.putString("stream", "\n" + results + "ALL PATH CHECKS PASSED\n");
@@ -67,6 +74,7 @@ public final class OfficeInstrumentation extends Instrumentation {
             if (pptxOnly) {
                 results.append(PptxCompatibilityChecks.run(this, activity));
                 results.append(PptxPathChecks.run(this));
+                results.append(PptxBackgroundChecks.run(this));
                 results.append(PptxChartChecks.run(this, activity));
                 results.append(PptxColorChecks.run(this, activity));
                 runOnMainSync(() -> activity.finish());
