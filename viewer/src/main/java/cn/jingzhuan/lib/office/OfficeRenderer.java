@@ -160,7 +160,15 @@ final class OfficeRenderer {
         if (e.type == OfficeDocument.Type.ELLIPSE) canvas.drawOval(rect, paint);
         else if (e.type == OfficeDocument.Type.LINE) canvas.drawLine(0, 0, e.width, e.height, paint);
         else if (e.stroke != 0) canvas.drawRect(rect, paint);
-        canvas.clipRect(rect); paint.setStyle(Paint.Style.FILL);
+        if (e.type == OfficeDocument.Type.TEXT) {
+            RectF textBounds = new RectF(rect);
+            for (OfficeTextLayout.Block block : d.texts) {
+                textBounds.top = Math.min(textBounds.top, block.y);
+                textBounds.bottom = Math.max(textBounds.bottom, block.y + block.layout.getHeight());
+            }
+            canvas.clipRect(textBounds);
+        } else canvas.clipRect(rect);
+        paint.setStyle(Paint.Style.FILL);
         if (e.type == OfficeDocument.Type.IMAGE) {
             Bitmap bitmap = images.get(e.image);
             if (bitmap != null) {

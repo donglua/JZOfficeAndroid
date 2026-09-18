@@ -50,6 +50,7 @@ final class PptxRenderingChecks {
                 localFlips();
                 fractionalDimensions();
                 text(document);
+                overflowText();
                 for (int page = 0; page < 2; page++) {
                     capture(context, document, images, page, 1080, 1600);
                     capture(context, document, images, page, 1800, 1000);
@@ -252,6 +253,42 @@ final class PptxRenderingChecks {
         int actual = layout.getLineBaseline(1) - layout.getLineBaseline(0);
         check(actual > natural, "PPTX line spacing increases baseline distance");
         near(actual, natural * 1.3f, 2, "PPTX baseline distance uses reduced multiplier");
+    }
+
+    private static void overflowText() {
+        OfficeDocument document = new OfficeDocument(); document.kind = OfficeDocument.Kind.PPTX; document.width = 960;
+        OfficeDocument.Page page = new OfficeDocument.Page(); page.width = 960; page.height = 540; page.background = Color.WHITE;
+        OfficeDocument.Element box = new OfficeDocument.Element();
+        box.type = OfficeDocument.Type.TEXT; box.x = 164; box.y = 104; box.width = 632; box.height = 277;
+        for (String title : new String[] {"短线超跌15以下的应用策略", "短线超跌15-30%的应用策略",
+            "短线超跌30-50以上的应用策略", "短线超跌50%以上应用策略"}) {
+            box.paragraphs.add(paragraph(title, 24));
+            box.paragraphs.add(paragraph("    正常超跌状态，抓上升回档行情。", 16));
+            box.paragraphs.add(paragraph("   ", 16));
+        }
+        box.paragraphs.add(paragraph("   ", 20));
+        box.paragraphs.add(paragraph("   注意事项：短线超跌大部分时间处于0的位置。", 16));
+        page.elements.add(box); document.pages.add(page);
+        OfficeRenderer renderer = new OfficeRenderer(); renderer.layout(document);
+        Bitmap frame = Bitmap.createBitmap(960, 540, Bitmap.Config.ARGB_8888);
+        try {
+            renderer.draw(new Canvas(frame), 0, page.height, Collections.emptyMap());
+            int ink = 0;
+            for (int y = Math.round(box.y + box.height) + 1; y < page.height; y++) {
+                for (int x = 0; x < frame.getWidth(); x++) {
+                    int pixel = frame.getPixel(x, y);
+                    if (Color.red(pixel) < 100 && Color.green(pixel) < 100 && Color.blue(pixel) < 100) ink++;
+                }
+            }
+            check(ink > 0, "PPTX text overflow remains visible below the fixed source box");
+        } finally { frame.recycle(); }
+    }
+
+    private static OfficeDocument.Paragraph paragraph(String text, float size) {
+        OfficeDocument.Paragraph paragraph = new OfficeDocument.Paragraph();
+        OfficeDocument.Run run = new OfficeDocument.Run(); run.text = text; run.size = size; run.bold = true;
+        paragraph.runs.add(run); paragraph.alignment = 1; paragraph.after = 0; paragraph.before = 0;
+        return paragraph;
     }
 
     private static void malformedTransforms(String json) throws Exception {
