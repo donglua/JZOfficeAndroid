@@ -18,8 +18,8 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 final class OfficePackage implements Closeable {
-    static final long MAX_INPUT = 64L * 1024 * 1024;
-    static final long MAX_EXPANDED = 128L * 1024 * 1024;
+    static final long MAX_INPUT = 128L * 1024 * 1024;
+    static final long MAX_EXPANDED = 256L * 1024 * 1024;
     static final int MAX_IMAGE_DIMENSION = 4096;
     static final class Image {
         final Bitmap bitmap;
@@ -47,7 +47,7 @@ final class OfficePackage implements Closeable {
                 int count;
                 while ((count = input.read(buffer)) != -1) {
                     checkCancelled();
-                    if ((size += count) > MAX_INPUT) throw new IOException("Document exceeds 64 MiB input limit");
+                    if ((size += count) > MAX_INPUT) throw new IOException("Document exceeds 128 MiB input limit");
                     output.write(buffer, 0, count);
                 }
             }
@@ -61,7 +61,7 @@ final class OfficePackage implements Closeable {
                 ZipEntry entry = entries.nextElement();
                 if (++count > 4096 || !names.add(entry.getName())) throw new IOException("Invalid or oversized package");
                 long size = entry.getSize();
-                if (size < 0 || size > MAX_EXPANDED || (expanded += size) > MAX_EXPANDED) throw new IOException("Expanded document exceeds 128 MiB limit");
+                if (size < 0 || size > MAX_EXPANDED || (expanded += size) > MAX_EXPANDED) throw new IOException("Expanded document exceeds 256 MiB limit");
             }
             return new OfficePackage(file, zip);
         } catch (IOException | RuntimeException e) {
@@ -91,7 +91,7 @@ final class OfficePackage implements Closeable {
                     charged = partBytes;
                     readSizes.put(part, charged);
                 }
-                if ((long) output.size() + n > limit || readBytes > 128L * 1024 * 1024) throw new IOException("Document part or read budget exceeded");
+                if ((long) output.size() + n > limit || readBytes > MAX_EXPANDED) throw new IOException("Document part or read budget exceeded");
                 output.write(buffer, 0, n);
             }
             return output.toByteArray();

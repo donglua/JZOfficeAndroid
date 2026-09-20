@@ -33,8 +33,9 @@ import java.util.zip.ZipOutputStream;
 
 final class ImageMemoryChecks {
     private static final int PAGE_COUNT = 16, IMAGE_SIZE = 2000, VIEW_SIZE = 600;
-    private static final int NAVIGATION_ROUNDS = 9;
-    private static final long MAX_PIXELS = 8_000_000L, MAX_EXPANDED = 128L * 1024 * 1024;
+    private static final int NAVIGATION_ROUNDS = 3;
+    private static final long IMAGE_PADDING = 6L * 1024 * 1024;
+    private static final long MAX_PIXELS = 8_000_000L, MAX_EXPANDED = OfficePackage.MAX_EXPANDED;
     private static final long TIMEOUT_MS = 20_000;
     private static final String XML = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>";
     private static final String REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -134,7 +135,7 @@ final class ImageMemoryChecks {
                     logicalReads += imageBytes[page - 1];
                 }
             }
-            check(logicalReads > MAX_EXPANDED, "Revisits exceed 128 MiB of logical image reads");
+            check(logicalReads > MAX_EXPANDED, "Revisits exceed 256 MiB of logical image reads");
 
             Load stale = new Load(), current = new Load();
             onMain(() -> {
@@ -411,6 +412,7 @@ final class ImageMemoryChecks {
             xml(zip, "ppt/_rels/presentation.xml.rels", relationships(relations.toString()));
             bitmap = Bitmap.createBitmap(IMAGE_SIZE, IMAGE_SIZE, Bitmap.Config.ARGB_8888);
             byte[] padding = new byte[8192];
+            zip.setLevel(0);
             for (int page = 1; page <= pages; page++) {
                 xml(zip, "ppt/slides/slide" + page + ".xml", slide());
                 xml(zip, "ppt/slides/_rels/slide" + page + ".xml.rels",
@@ -426,8 +428,8 @@ final class ImageMemoryChecks {
                 }
                 zip.putNextEntry(new ZipEntry(imagePath(page)));
                 if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, zip)) throw new IOException("Cannot encode fixture image");
-                // PNG decoders ignore trailing bytes; package reads still account for a full MiB per visit.
-                for (int i = 0; i < 128; i++) zip.write(padding);
+                // Trailing PNG padding exercises package reads without increasing decoded pixels.
+                for (long bytes = 0; bytes < IMAGE_PADDING; bytes += padding.length) zip.write(padding);
                 zip.closeEntry();
             }
             complete = true;
@@ -440,15 +442,17 @@ final class ImageMemoryChecks {
 
     private static long[] verifyFixture(File file) throws IOException {
         long[] imageBytes = new long[PAGE_COUNT];
+        check(file.length() > 64L * 1024 * 1024 && file.length() <= OfficePackage.MAX_INPUT,
+            "Large PPTX fixture exceeds the old 64 MiB input limit");
         try (ZipFile zip = new ZipFile(file)) {
             long expanded = 0;
             Enumeration<? extends ZipEntry> entries = zip.entries();
             while (entries.hasMoreElements()) expanded += entries.nextElement().getSize();
-            check(expanded <= MAX_EXPANDED, "Unique expanded fixture data fits within 128 MiB");
+            check(expanded <= MAX_EXPANDED, "Unique expanded fixture data fits within 256 MiB");
             check((long) PAGE_COUNT * IMAGE_SIZE * IMAGE_SIZE > MAX_PIXELS, "Fixture exceeds the aggregate pixel budget");
             for (int page = 1; page <= PAGE_COUNT; page++) {
                 imageBytes[page - 1] = zip.getEntry(imagePath(page)).getSize();
-                check(imageBytes[page - 1] > 1024 * 1024, "Each PNG has one MiB of trailing padding");
+                check(imageBytes[page - 1] > IMAGE_PADDING, "Each PNG has six MiB of trailing padding");
             }
         }
         return imageBytes;

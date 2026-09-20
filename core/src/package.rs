@@ -4,6 +4,9 @@ use std::collections::HashMap;
 use std::io::{Read, Seek, SeekFrom};
 use zip::ZipArchive;
 
+const MAX_INPUT: u64 = 128 * 1024 * 1024;
+const MAX_EXPANDED: u64 = 256 * 1024 * 1024;
+
 trait ReadSeek: Read + Seek {}
 impl<T: Read + Seek> ReadSeek for T {}
 
@@ -15,8 +18,8 @@ pub struct Package {
 impl Package {
     pub fn new(mut reader: impl Read + Seek + 'static) -> Result<Self> {
         let length = reader.seek(SeekFrom::End(0))?;
-        if length > 64 * 1024 * 1024 {
-            return Err(Error::Limit("Input exceeds 64 MiB"));
+        if length > MAX_INPUT {
+            return Err(Error::Limit("Input exceeds 128 MiB"));
         }
         let count = crate::zip_directory::entry_count(&mut reader, length)?;
         reader.seek(SeekFrom::Start(0))?;
@@ -30,8 +33,8 @@ impl Package {
             expanded = expanded
                 .checked_add(entry.size())
                 .ok_or(Error::Limit("Expanded package is too large"))?;
-            if expanded > 128 * 1024 * 1024 {
-                return Err(Error::Limit("Expanded package exceeds 128 MiB"));
+            if expanded > MAX_EXPANDED {
+                return Err(Error::Limit("Expanded package exceeds 256 MiB"));
             }
         }
         Ok(Self {
@@ -70,7 +73,7 @@ impl Package {
         let length =
             u64::try_from(bytes.len()).map_err(|_| Error::Limit("Package part is too large"))?;
         self.read_bytes += length;
-        if length > limit || self.read_bytes > 128 * 1024 * 1024 {
+        if length > limit || self.read_bytes > MAX_EXPANDED {
             return Err(Error::Limit("Package read budget exceeded"));
         }
         Ok(bytes)
