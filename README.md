@@ -4,6 +4,8 @@
 
 这是基础预览实现，不保证与 Microsoft Office 的版式一致。旧版 `.doc/.ppt/.xls`、加密文档、ZIP64/分卷容器和编辑功能不在支持范围内。
 
+当前版本为 [v0.1.0](https://github.com/donglua/JZOfficeAndroid/releases/tag/v0.1.0)，已发布到 [Maven Central](https://central.sonatype.com/artifact/io.github.donglua/viewer/0.1.0)。
+
 ## 模块
 
 | 目录 | 职责 |
@@ -30,7 +32,28 @@
 
 ## Android 接入
 
-最低 Android 6.0（API 23）。引用源码模块：
+最低 Android 6.0（API 23）。在 `settings.gradle.kts` 中配置 Maven Central：
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+```
+
+在应用模块的 `build.gradle.kts` 中添加依赖：
+
+```kotlin
+dependencies {
+    implementation("io.github.donglua:viewer:0.1.0")
+}
+```
+
+已发布的 AAR 包含 `arm64-v8a` 和 `armeabi-v7a` 原生库、R8 保留规则，不需要额外的 JVM 运行时依赖，也不要求接入项目安装 Rust 或 NDK。Demo 样例不进入 AAR。
+
+在本仓库开发或调试时，也可以引用源码模块：
 
 ```kotlin
 dependencies {
@@ -38,7 +61,7 @@ dependencies {
 }
 ```
 
-也可以把构建得到的 AAR 放入现有项目的 `libs` 目录，再用 `implementation(files("libs/viewer-release.aar"))` 引用。AAR 包含 JNI 库和 R8 保留规则，不需要额外的 JVM 运行时依赖。
+离线接入可以把构建得到的 AAR 放入现有项目的 `libs` 目录，再用 `implementation(files("libs/viewer-release.aar"))` 引用。
 
 ```kotlin
 import cn.jingzhuan.lib.office.OfficePreviewView
@@ -117,85 +140,11 @@ PPTX 文本框支持继承和覆盖 `wrap`：`none` 按带样式的文字宽度�
 
 ## 构建
 
-需要 JDK 17 或更新版本、Android SDK 35、NDK `28.2.13676358`、通过 rustup 安装的 Rust 1.87 或更新版本。`rustup` 和 `cargo` 需要在构建进程的 `PATH` 中可用；Android Studio 也需要能找到这两个命令。使用 `ANDROID_HOME`、`ANDROID_SDK_ROOT` 或 `local.properties` 配置 SDK。
+源码构建需要 Android SDK 35、NDK `28.2.13676358`、通过 rustup 安装的 Rust 1.87 或更新版本。当前仓库的 `gradle/gradle-daemon-jvm.properties` 为 Gradle daemon 指定 JDK 25；包含 Javadoc 的发布构建使用 JDK 21，配置见下文。`rustup` 和 `cargo` 需要在构建进程的 `PATH` 中可用；Android Studio 也需要能找到这两个命令。使用 `ANDROID_HOME`、`ANDROID_SDK_ROOT` 或 `local.properties` 配置 SDK。
 
 ```sh
 ./gradlew :viewer:assembleRelease :demo:assembleDebug
 ```
-
-## 发布到 Sonatype Central
-
-`viewer` 模块已配置为发布 release AAR、sources JAR、Javadoc JAR、POM 和 GPG 签名。默认坐标是
-`io.github.donglua:viewer:0.1.0`，正式发布前请确认这个坐标位于你已在 Central Portal 验证的 namespace 下。
-
-Central Portal 的 Portal Token 和签名信息只放在用户级 Gradle 属性或环境变量中，不要提交到仓库。例如：
-
-```properties
-publishedGroupId=io.github.donglua
-publishedArtifactId=viewer
-publishedVersion=0.1.0
-publishedLicenseName=Apache License, Version 2.0
-publishedLicenseUrl=https://www.apache.org/licenses/LICENSE-2.0.txt
-publishedDeveloperName=Your Name
-publishedDeveloperEmail=you@example.com
-sonatypeNamespace=io.github.donglua
-sonatypeUsername=<portal-token-username>
-sonatypePassword=<portal-token-password>
-signing.secretKeyRingFile=/absolute/path/to/secring.gpg
-signing.keyId=<gpg-key-id>
-signing.password=<gpg-passphrase>
-```
-
-也可以用 `SONATYPE_USERNAME`、`SONATYPE_PASSWORD`、`SIGNING_KEY` 和 `SIGNING_PASSWORD` 环境变量提供 Portal Token 与 ASCII-armored 私钥。
-
-### GitHub Actions 配置
-
-仓库中的 `.github/workflows/publish-sonatype.yml` 在发布 GitHub 正式 Release 时自动运行，并使用 `maven-central` environment。草稿和预发布版不会自动发布 Maven Central。先在 GitHub 仓库的 Settings 中创建这个 environment，再配置以下 Actions Secrets：
-
-| Secret | 内容 |
-| --- | --- |
-| `SONATYPE_USERNAME` | Central Portal User Token 的 username |
-| `SONATYPE_PASSWORD` | Central Portal User Token 的 password |
-| `SIGNING_KEY` | ASCII-armored GPG 私钥全文 |
-| `SIGNING_PASSWORD` | GPG 私钥口令 |
-
-再配置以下 Actions Variables。它们会写入发布 POM；`SONATYPE_NAMESPACE` 必须是 Central Portal 中已验证的 namespace：
-
-| Variable | 内容 |
-| --- | --- |
-| `SONATYPE_NAMESPACE` | `io.github.donglua`，须已在 Central Portal 验证 |
-| `PUBLISHED_GROUP_ID` | `io.github.donglua` |
-| `PUBLISHED_ARTIFACT_ID` | Maven artifactId，例如 `viewer` |
-| `PUBLISHED_NAME` | POM 中的项目名 |
-| `PUBLISHED_DESCRIPTION` | POM 中的项目描述 |
-| `PUBLISHED_URL` | 项目主页或 GitHub 仓库地址 |
-| `PUBLISHED_LICENSE_NAME` | 真实使用的许可证名称 |
-| `PUBLISHED_LICENSE_URL` | 许可证 URL |
-| `PUBLISHED_DEVELOPER_ID` | 开发者 ID |
-| `PUBLISHED_DEVELOPER_NAME` | 开发者姓名或组织名 |
-| `PUBLISHED_DEVELOPER_EMAIL` | 开发者公开邮箱 |
-
-`SONATYPE_NAMESPACE` 和 `PUBLISHED_GROUP_ID` 未配置时均使用默认值 `io.github.donglua`。如果 GitHub Actions Variables 中已配置旧值，需要同步更新。
-
-将工作流和发布配置提交并推送后，基于包含这些配置的提交创建 tag，再发布 GitHub 正式 Release。tag 使用 `v1.0.0` 或 `1.0.0` 这样的三段数字版本；工作流会去掉可选的 `v` 前缀，将该 tag 对应的代码发布为 `io.github.donglua:viewer:1.0.0`。不接受 `-rc`、`-beta`、`-SNAPSHOT` 等后缀。
-
-工作流监听 `release.released`，也支持将预发布版转为正式版，但 tag 仍须符合上述格式。任务会完成 Rust 检查、构建 release AAR、生成 sources/Javadoc、签名并上传 Sonatype；Sonatype 验证通过后自动发布 Maven Central，无需手动点击 Publish。部署状态可在 [Central Portal](https://central.sonatype.com/publishing) 查看。
-
-也可以在 Actions 中手动运行 **Publish viewer to Sonatype Central**，选择待发布的 tag 或分支，输入版本号；手动入口同样会自动发布。不要重用已经发布过的 Maven 版本号。Release 的事件语义见 [GitHub 文档](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#release)，自动发布模式见 [Sonatype 文档](https://central.sonatype.org/publish/publish-portal-ossrh-staging-api/#post-to-manualuploaddefaultrepositorynamespace)。
-
-先在本地检查发布内容：
-
-```sh
-./gradlew :viewer:publishReleasePublicationToMavenLocal
-```
-
-确认坐标、许可证、开发者信息、签名和 Portal namespace 后，执行：
-
-```sh
-./gradlew :viewer:publishToSonatype
-```
-
-本地任务默认使用 `user_managed` 模式，上传后在 Central Portal 手动发布。需要验证通过后自动发布时，增加 `-PsonatypePublishingType=automatic`；GitHub Actions 已使用该参数。Central 发布后坐标不可修改或删除。
 
 Gradle 的 `buildNative` 任务会通过原生构建脚本检查当前 Rust 工具链的 target，仅对缺失项执行 `rustup target add`，再编译并打包 `.so`。无需手动安装 Android target；首次缺少 target 时需要联网。Rust/rustup 本身仍需预先安装。
 
@@ -223,6 +172,91 @@ Rust 核心可独立使用：
 ```rust
 let document = jz_office_core::parse_path(std::path::Path::new("sample.docx"))?;
 ```
+
+## 发布到 Sonatype Central
+
+`viewer` 模块发布 release AAR、sources JAR、Javadoc JAR、POM 和 GPG 签名。`io.github.donglua:viewer:0.1.0` 已发布；后续发布必须使用新版本号，并确保坐标位于 Central Portal 已验证的 namespace 下。以下配置以 `0.1.1` 为例。
+
+Central Portal 的 Portal Token 和签名信息只放在用户级 Gradle 属性或环境变量中，不要提交到仓库。例如：
+
+```properties
+publishedGroupId=io.github.donglua
+publishedArtifactId=viewer
+publishedVersion=0.1.1
+publishedLicenseName=Apache License, Version 2.0
+publishedLicenseUrl=https://www.apache.org/licenses/LICENSE-2.0.txt
+publishedDeveloperName=Your Name
+publishedDeveloperEmail=you@example.com
+sonatypeNamespace=io.github.donglua
+sonatypeUsername=<portal-token-username>
+sonatypePassword=<portal-token-password>
+signing.secretKeyRingFile=/absolute/path/to/secring.gpg
+signing.keyId=<gpg-key-id>
+signing.password=<gpg-passphrase>
+```
+
+也可以用 `SONATYPE_USERNAME`、`SONATYPE_PASSWORD`、`SIGNING_KEY` 和 `SIGNING_PASSWORD` 环境变量提供 Portal Token 与 ASCII-armored 私钥。
+
+### GitHub Actions 配置
+
+仓库中的 [发布工作流](.github/workflows/publish-sonatype.yml) 在发布 GitHub 正式 Release 时自动运行，并使用 `maven-central` environment。仅推送 tag 不会触发发布，草稿和预发布版也不会自动发布 Maven Central。工作流使用 JDK 21，并将 Gradle daemon 切换到同一版本，以兼容 AGP 的文档生成器。
+
+维护发布环境时，在 GitHub 仓库的 Settings 中配置以下 Actions Secrets：
+
+| Secret | 内容 |
+| --- | --- |
+| `SONATYPE_USERNAME` | Central Portal User Token 的 username |
+| `SONATYPE_PASSWORD` | Central Portal User Token 的 password |
+| `SIGNING_KEY` | ASCII-armored GPG 私钥全文 |
+| `SIGNING_PASSWORD` | GPG 私钥口令 |
+
+再配置以下 Actions Variables。它们会写入发布 POM；`SONATYPE_NAMESPACE` 必须是 Central Portal 中已验证的 namespace：
+
+| Variable | 内容 |
+| --- | --- |
+| `SONATYPE_NAMESPACE` | `io.github.donglua`，须已在 Central Portal 验证 |
+| `PUBLISHED_GROUP_ID` | `io.github.donglua` |
+| `PUBLISHED_ARTIFACT_ID` | Maven artifactId，例如 `viewer` |
+| `PUBLISHED_NAME` | POM 中的项目名 |
+| `PUBLISHED_DESCRIPTION` | POM 中的项目描述 |
+| `PUBLISHED_URL` | 项目主页或 GitHub 仓库地址 |
+| `PUBLISHED_LICENSE_NAME` | 真实使用的许可证名称 |
+| `PUBLISHED_LICENSE_URL` | 许可证 URL |
+| `PUBLISHED_DEVELOPER_ID` | 开发者 ID |
+| `PUBLISHED_DEVELOPER_NAME` | 开发者姓名或组织名 |
+| `PUBLISHED_DEVELOPER_EMAIL` | 开发者公开邮箱 |
+
+`SONATYPE_NAMESPACE` 和 `PUBLISHED_GROUP_ID` 未配置时均使用默认值 `io.github.donglua`。如果 GitHub Actions Variables 中已配置旧值，需要同步更新。
+
+将工作流和发布配置提交并推送后，基于待发布提交创建 tag，再发布 GitHub 正式 Release。建议统一使用 `v0.1.1` 这样的标签；工作流去掉 `v` 前缀，将该 tag 对应的代码发布为 `io.github.donglua:viewer:0.1.1`。版本号必须为三段数字，不接受 `-rc`、`-beta`、`-SNAPSHOT` 等后缀。
+
+工作流监听 `release.released`，也支持将预发布版转为正式版，但 tag 仍须符合上述格式。任务会完成 Rust 检查、构建 release AAR、生成 sources/Javadoc、签名并上传 Sonatype；Sonatype 验证通过后自动发布 Maven Central，无需手动点击 Publish。部署状态可在 [Central Portal](https://central.sonatype.com/publishing) 查看。
+
+当前工作流将产物发布到 Maven Central，不自动向 GitHub Release 附加 AAR 或 Demo APK。
+
+也可以在 Actions 中手动运行 **Publish viewer to Sonatype Central**，选择包含最新工作流的 `main` 分支，输入版本号（例如 `0.1.1` 或 `v0.1.1`）。手动入口固定检出已存在的 `v0.1.1` 标签，并自动发布该标签源码；所选工作流分支不改变发布源码。此方式可用于修复 CI 后重试尚未成功的发布，不要重用已发布到 Maven Central 的版本号。Release 的事件语义见 [GitHub 文档](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#release)，自动发布模式见 [Sonatype 文档](https://central.sonatype.org/publish/publish-portal-ossrh-staging-api/#post-to-manualuploaddefaultrepositorynamespace)。
+
+### 本地发布
+
+本地生成 Javadoc 需安装 JDK 21，并在当前发布工作副本中将 `gradle/gradle-daemon-jvm.properties` 的内容设为以下配置，与 CI 一致。仅设置 `JAVA_HOME` 不会覆盖 daemon 的版本要求；不保留原文件中指向 JDK 25 的下载地址。
+
+```properties
+toolchainVersion=21
+```
+
+先在本地检查发布内容：
+
+```sh
+./gradlew :viewer:publishReleasePublicationToMavenLocal
+```
+
+确认坐标、许可证、开发者信息、签名和 Portal namespace 后，执行：
+
+```sh
+./gradlew :viewer:publishToSonatype
+```
+
+本地任务默认使用 `user_managed` 模式，上传后在 Central Portal 手动发布。需要验证通过后自动发布时，增加 `-PsonatypePublishingType=automatic`；GitHub Actions 已使用该参数。Central 发布后坐标不可修改或删除。
 
 ## 验证
 
