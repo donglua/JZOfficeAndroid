@@ -7,6 +7,7 @@ mod inheritance;
 mod parts;
 mod path;
 mod render;
+mod round_rect;
 mod styles;
 mod table;
 mod text;
@@ -115,6 +116,7 @@ pub(crate) fn parse(pkg: &mut Package, main_part: &str) -> Result<Document> {
             defaults: presentation.root.child("defaultTextStyle"),
             layout: layout_root,
             master: master_root,
+            background_gradient: None,
         };
         renderer.background(
             &mut page,

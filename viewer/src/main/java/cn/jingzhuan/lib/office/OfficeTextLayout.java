@@ -65,7 +65,7 @@ final class OfficeTextLayout {
             .setIndents(new int[] {first, rest}, new int[] {right});
         if (paragraph.lineSpacingRule == OfficeDocument.LineSpacingRule.AUTO) {
             if (pptx && paragraph.lineSpacing != 1) {
-                text.setSpan(new PptxLineHeight(font.getTextSize(), paragraph.lineSpacing),
+                text.setSpan(new PptxLineHeight(font, paragraph.lineSpacing),
                     0, text.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             } else builder.setLineSpacing(0, paragraph.lineSpacing);
         } else {
@@ -95,23 +95,39 @@ final class OfficeTextLayout {
     }
 
     private static final class PptxLineHeight implements LineHeightSpan {
-        private final float baseSize, spacing;
+        private final TextPaint base;
+        private final float spacing;
 
-        PptxLineHeight(float baseSize, float spacing) { this.baseSize = baseSize; this.spacing = spacing; }
+        PptxLineHeight(TextPaint base, float spacing) { this.base = new TextPaint(base); this.spacing = spacing; }
 
         @Override public void chooseHeight(CharSequence text, int start, int end, int spanStartY, int lineTop, Paint.FontMetricsInt metrics) {
             float size = 0;
-            if (text instanceof Spanned) {
-                for (AbsoluteSizeSpan span : ((Spanned) text).getSpans(start, end, AbsoluteSizeSpan.class)) {
-                    size = Math.max(size, span.getSize());
+            int ascent = 0, descent = 0;
+            TextPaint font = new TextPaint(base);
+            Spanned spans = text instanceof Spanned ? (Spanned) text : null;
+            // StaticLayout can reuse metrics already changed by a previous line.
+            for (int offset = start; offset < end;) {
+                int next = spans == null ? end : spans.nextSpanTransition(offset, end, MetricAffectingSpan.class);
+                font.set(base);
+                if (spans != null) {
+                    for (MetricAffectingSpan span : spans.getSpans(offset, next, MetricAffectingSpan.class)) {
+                        span.updateMeasureState(font);
+                    }
                 }
+                Paint.FontMetricsInt natural = font.getFontMetricsInt();
+                ascent = Math.min(ascent, natural.ascent); descent = Math.max(descent, natural.descent);
+                size = Math.max(size, font.getTextSize());
+                offset = next;
             }
-            if (size == 0) size = baseSize;
-            int natural = metrics.descent - metrics.ascent;
+            if (size == 0) {
+                Paint.FontMetricsInt natural = base.getFontMetricsInt();
+                ascent = natural.ascent; descent = natural.descent; size = base.getTextSize();
+            }
+            int natural = descent - ascent;
             // DrawingML leading belongs to the whole line box, including a single line.
             int extra = Math.max(1, Math.round(Math.max(natural, size * 1.2f) * spacing)) - natural;
-            metrics.ascent -= extra - extra / 2;
-            metrics.descent += extra / 2;
+            metrics.ascent = ascent - (extra - extra / 2);
+            metrics.descent = descent + extra / 2;
             metrics.top = metrics.ascent; metrics.bottom = metrics.descent;
         }
     }

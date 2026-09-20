@@ -44,6 +44,7 @@ impl Theme {
             positions: values.iter().map(|(position, _)| *position).collect(),
             angle: angle % 360.0,
             scaled: flag(linear.attr("scaled"), true),
+            in_slide_space: false,
         })
     }
 }

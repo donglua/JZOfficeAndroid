@@ -11,7 +11,7 @@ final class DocumentDecoder {
     static OfficeDocument decode(String json) throws IOException {
         try {
             JSONObject root = new JSONObject(json);
-            if (root.getInt("schemaVersion") != 6) throw new IOException("Unsupported core model version");
+            if (root.getInt("schemaVersion") != 7) throw new IOException("Unsupported core model version");
             OfficeDocument document = new OfficeDocument();
             document.kind = OfficeDocument.Kind.valueOf(root.getString("kind"));
             document.width = (float) root.getDouble("width");
@@ -231,6 +231,7 @@ final class DocumentDecoder {
             }
         }
         gradient.angle = (float) json.getDouble("angle"); gradient.scaled = json.getBoolean("scaled");
+        gradient.inSlideSpace = json.getBoolean("inSlideSpace");
         if (Float.isNaN(gradient.angle) || Float.isInfinite(gradient.angle)) throw new JSONException("Invalid gradient angle");
         return gradient;
     }

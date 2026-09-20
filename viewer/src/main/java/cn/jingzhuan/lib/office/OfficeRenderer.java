@@ -56,7 +56,17 @@ final class OfficeRenderer {
             for (OfficeDocument.Page source : document.pages) {
                 Page page = new Page(); page.y = height;
                 page.width = source.width; page.height = source.height; page.background = source.background;
-                for (OfficeDocument.Element e : source.elements) page.elements.add(element(e, e.width, false, document));
+                for (OfficeDocument.Element e : source.elements) {
+                    Element drawn = element(e, e.width, false, document);
+                    if (e.fillGradient != null && e.fillGradient.inSlideSpace) {
+                        Matrix inverse = new Matrix();
+                        if (drawn.transform.invert(inverse)) {
+                            drawn.fillShader = gradient(e.fillGradient, page.width, page.height);
+                            drawn.fillShader.setLocalMatrix(inverse);
+                        } else document.warn("Slide background fill has an invalid shape transform");
+                    }
+                    page.elements.add(drawn);
+                }
                 pages.add(page); height += page.height + 16;
             }
             height = Math.max(0, height - 16);
@@ -79,7 +89,9 @@ final class OfficeRenderer {
             }
             d.paths.add(path);
         }
-        if (source.fillGradient != null) d.fillShader = gradient(source.fillGradient, d.width, d.height);
+        if (source.fillGradient != null && !source.fillGradient.inSlideSpace) {
+            d.fillShader = gradient(source.fillGradient, d.width, d.height);
+        }
         if (source.type == OfficeDocument.Type.IMAGE && flow) {
             float w = source.width > 0 ? source.width : available;
             float h = source.height > 0 ? source.height : 100;

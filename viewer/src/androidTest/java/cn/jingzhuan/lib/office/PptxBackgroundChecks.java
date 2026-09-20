@@ -25,7 +25,7 @@ final class PptxBackgroundChecks {
     static String run(OfficeInstrumentation instrumentation) throws Exception {
         Context context = instrumentation.getTargetContext();
         instrumentation.runOnMainChecked(() -> capture(context));
-        return "PASS PPTX inherited gradient background layer, transparent PNG foreground and shader reset pixels\n"
+        return "PASS PPTX inherited gradient background, slide-space shape fill, transparent PNG and shader reset pixels\n"
             + "SCREENSHOTS pptx-background-synthetic.png\n";
     }
 
@@ -55,6 +55,12 @@ final class PptxBackgroundChecks {
             nearColor(bitmap.getPixel(160, 104), bitmap.getPixel(110, 104), 2, "Transparent PNG area reveals gradient background");
             color(bitmap, 36, Math.round(second.y + 36), PLAIN, "Second slide solid fill has no stale gradient shader");
             color(bitmap, 36, Math.round(second.y + 92), PLAIN, "Second slide stays solid at lower sample");
+            OfficeRenderer.Page third = renderer.pages.get(2);
+            color(bitmap, 5, Math.round(third.y + 90), PLAIN, "Foreground covers the actual slide background");
+            for (int[] point : new int[][] {{35, 70}, {70, 100}, {230, 65}, {230, 105}}) {
+                nearColor(bitmap.getPixel(point[0], Math.round(third.y + point[1])), bitmap.getPixel(40, point[1]), 2,
+                    "Rotated/flipped shape reveals the background at slide coordinates");
+            }
 
             File file = new File(context.getFilesDir(), "pptx-background-synthetic.png");
             try (FileOutputStream output = new FileOutputStream(file)) {
@@ -97,6 +103,25 @@ final class PptxBackgroundChecks {
         plain.fill = PLAIN;
         plainPage.elements.add(plain);
         document.pages.add(plainPage);
+
+        OfficeDocument.Page shapePage = new OfficeDocument.Page();
+        shapePage.width = 320;
+        shapePage.height = 180;
+        shapePage.elements.add(backgroundRect(320, 180));
+        OfficeDocument.Element cover = new OfficeDocument.Element();
+        cover.type = OfficeDocument.Type.RECT;
+        cover.width = 320; cover.height = 180; cover.fill = PLAIN;
+        shapePage.elements.add(cover);
+        OfficeDocument.Element rotated = backgroundRect(60, 100);
+        rotated.x = 30; rotated.y = 30; rotated.rotation = 90;
+        rotated.fillGradient.inSlideSpace = true;
+        shapePage.elements.add(rotated);
+        OfficeDocument.Element transformed = backgroundRect(80, 90);
+        transformed.x = 170; transformed.y = 40; transformed.rotation = 90; transformed.flipH = true;
+        transformed.transform = new float[] {1, 0, 0, 1, 20, 10};
+        transformed.fillGradient.inSlideSpace = true;
+        shapePage.elements.add(transformed);
+        document.pages.add(shapePage);
         return document;
     }
 

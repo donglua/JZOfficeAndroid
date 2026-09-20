@@ -97,3 +97,89 @@ fn direct_gradient_background_remains_when_master_shapes_are_hidden() -> TestRes
     );
     Ok(())
 }
+
+fn background_shape(background: &str, flag: &str) -> TestResult<serde_json::Value> {
+    let mut parts = pptx::parts();
+    let shape = format!(
+        r#"<p:sp useBgFill="{flag}"><p:spPr><a:xfrm><a:off x="1270000" y="2540000"/><a:ext cx="5080000" cy="1270000"/></a:xfrm><a:prstGeom prst="rect"/><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></p:spPr></p:sp>"#
+    );
+    replace(
+        &mut parts,
+        "ppt/slides/slide2.xml",
+        &part("sld", "", &shape),
+    );
+    replace(
+        &mut parts,
+        "ppt/slideLayouts/slideLayout1.xml",
+        &part("sldLayout", background, ""),
+    );
+    let document = parse_reader(Cursor::new(archive(&parts)?))?;
+    Ok(serde_json::to_value(&document.pages[0])?)
+}
+
+#[test]
+fn use_background_fill_keeps_inherited_gradient_in_slide_coordinates() -> TestResult {
+    let page = background_shape(GRADIENT, "1")?;
+    let elements = page["elements"].as_array().ok_or("missing elements")?;
+    let shape = elements.last().ok_or("missing shape")?;
+    assert_eq!(
+        shape["fillGradient"]["colors"],
+        page["elements"][0]["fillGradient"]["colors"]
+    );
+    assert_eq!(shape["fillGradient"]["inSlideSpace"], true);
+    assert_eq!(page["elements"][0]["fillGradient"]["inSlideSpace"], false);
+    assert_eq!(shape["x"], 100.0);
+    assert_eq!(shape["y"], 200.0);
+    Ok(())
+}
+
+#[test]
+fn background_fill_overrides_local_fill_only_when_enabled() -> TestResult {
+    let background =
+        r#"<p:bg><p:bgPr><a:solidFill><a:srgbClr val="123456"/></a:solidFill></p:bgPr></p:bg>"#;
+    for (flag, expected) in [
+        ("1", 0xff123456u32),
+        ("true", 0xff123456),
+        ("0", 0xffff0000),
+    ] {
+        let page = background_shape(background, flag)?;
+        assert_eq!(page["elements"][0]["fill"], expected);
+        assert!(page["elements"][0]["fillGradient"].is_null());
+    }
+    Ok(())
+}
+
+#[test]
+fn explicit_shape_background_fill_flag_overrides_its_placeholder() -> TestResult {
+    let mut parts = pptx::parts();
+    let placeholder = |flag: &str| {
+        format!(
+            r#"<p:sp {flag}><p:nvSpPr><p:nvPr><p:ph idx="1"/></p:nvPr></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1270000" cy="1270000"/></a:xfrm><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></p:spPr></p:sp>"#
+        )
+    };
+    replace(
+        &mut parts,
+        "ppt/slideLayouts/slideLayout1.xml",
+        &part("sldLayout", GRADIENT, &placeholder(r#"useBgFill="1""#)),
+    );
+    for (flag, expected) in [("", true), (r#"useBgFill="0""#, false)] {
+        replace(
+            &mut parts,
+            "ppt/slides/slide2.xml",
+            &part("sld", "", &placeholder(flag)),
+        );
+        let doc = parse_reader(Cursor::new(archive(&parts)?))?;
+        let shape = doc.pages[0].elements.last().ok_or("missing shape")?;
+        assert_eq!(
+            shape
+                .fill_gradient
+                .as_ref()
+                .is_some_and(|fill| fill.in_slide_space),
+            expected
+        );
+        if !expected {
+            assert_eq!(shape.fill, 0xffff0000);
+        }
+    }
+    Ok(())
+}

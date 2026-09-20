@@ -45,6 +45,7 @@ pub struct GradientFill {
     pub positions: Vec<f32>,
     pub angle: f32,
     pub scaled: bool,
+    pub in_slide_space: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Default, PartialEq)]
@@ -89,7 +90,7 @@ pub struct Document {
 impl Document {
     pub fn new(kind: Kind) -> Self {
         Self {
-            schema_version: 6,
+            schema_version: 7,
             kind,
             width: 595.0,
             pages: Vec::new(),

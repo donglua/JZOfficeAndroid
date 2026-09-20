@@ -60,7 +60,7 @@ final class OfficeDocument {
         int[] colors;
         float[] positions;
         float angle;
-        boolean scaled;
+        boolean scaled, inSlideSpace;
     }
 
     static final class ImageCrop {

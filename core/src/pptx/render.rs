@@ -6,7 +6,7 @@ use super::styles::Styles;
 use super::text::Text;
 use super::transform::{self, Transform};
 use super::{flag, relation_id, Budget};
-use crate::model::{Document, Element, ElementType, ImageCrop, Page, Paragraph};
+use crate::model::{Document, Element, ElementType, GradientFill, ImageCrop, Page, Paragraph};
 use crate::xml::Node;
 use crate::{Package, Result};
 
@@ -18,6 +18,7 @@ pub(super) struct Render<'a> {
     pub defaults: Option<&'a Node>,
     pub layout: Option<&'a Node>,
     pub master: Option<&'a Node>,
+    pub background_gradient: Option<GradientFill>,
 }
 
 #[derive(Clone, Copy)]
@@ -35,6 +36,7 @@ impl Render<'_> {
             };
             if let Some(properties) = bg.child("bgPr") {
                 if let Some(gradient) = self.theme.gradient(properties, self.doc) {
+                    self.background_gradient = Some(gradient.clone());
                     let background = Element {
                         kind: ElementType::RECT,
                         width: page.width,
@@ -140,6 +142,18 @@ impl Render<'_> {
                         theme: self.theme,
                     }
                     .drawing(&chain, &mut element);
+                    if chain
+                        .iter()
+                        .rev()
+                        .find_map(|node| node.attrs.get("useBgFill"))
+                        .is_some_and(|value| flag(value, false))
+                    {
+                        element.fill = page.background;
+                        element.fill_gradient = self.background_gradient.clone().map(|mut fill| {
+                            fill.in_slide_space = true;
+                            fill
+                        });
+                    }
                     if supported
                         && (element.fill != 0
                             || element.fill_gradient.is_some()

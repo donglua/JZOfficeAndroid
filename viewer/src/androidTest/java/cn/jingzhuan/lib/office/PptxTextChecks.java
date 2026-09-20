@@ -15,6 +15,7 @@ final class PptxTextChecks {
 
     static String run(OfficeInstrumentation instrumentation) throws Exception {
         Context context = instrumentation.getTargetContext();
+        instrumentation.runOnMainChecked(PptxTextChecks::multilineSpacing);
         Uri uri = Uri.parse("content://" + context.getPackageName() + ".fixtures/" + FIXTURE);
         try (OfficePackage source = OfficePackage.open(context, uri)) {
             OfficeDocument document = DocumentDecoder.decode(NativeCore.parse(source.file.getAbsolutePath()));
@@ -25,8 +26,45 @@ final class PptxTextChecks {
                 }
             });
         }
-        return "PASS PPTX typography URI/JNI, narrow number/title boxes, first-line leading and DOCX isolation\n"
+        return "PASS PPTX typography URI/JNI, narrow number/title boxes, consistent multiline leading and DOCX isolation\n"
             + "SCREENSHOTS pptx-typography-page{1,2}-{960,1920}.png\n";
+    }
+
+    private static void multilineSpacing() {
+        OfficeDocument.Paragraph paragraph = new OfficeDocument.Paragraph();
+        paragraph.lineSpacing = 1.5f;
+        paragraph.after = 0;
+        OfficeDocument.Run run = new OfficeDocument.Run();
+        run.size = 14;
+        run.text = "半导体设备行业发展与市场情况。半导体设备行业发展与市场情况。半导体设备行业发展与市场情况。";
+        paragraph.runs.add(run);
+        java.util.List<OfficeTextLayout.Block> blocks = new java.util.ArrayList<>();
+        OfficeTextLayout.append(Collections.singletonList(paragraph), 0, 0, 220, blocks, true);
+        android.text.StaticLayout layout = blocks.get(0).layout;
+        PptxRenderingChecks.check(layout.getLineCount() >= 3, "CJK paragraph wraps onto at least three lines");
+        int firstHeight = layout.getLineBottom(0) - layout.getLineTop(0);
+        PptxRenderingChecks.check(firstHeight >= 24 && firstHeight <= 30, "150 percent leading includes first line");
+        for (int line = 1; line < layout.getLineCount(); line++) {
+            PptxRenderingChecks.check(layout.getLineBottom(line) - layout.getLineTop(line) == firstHeight,
+                "Equal font sizes keep equal line heights at line " + line);
+            PptxRenderingChecks.check(layout.getLineBaseline(line) - layout.getLineBaseline(line - 1) == firstHeight,
+                "CJK baselines advance evenly at line " + line);
+        }
+        paragraph.runs.clear();
+        for (int size : new int[] {14, 28, 14}) {
+            OfficeDocument.Run mixed = new OfficeDocument.Run();
+            mixed.size = size;
+            mixed.text = paragraph.runs.size() == 2 ? "小字" : "字号\n";
+            paragraph.runs.add(mixed);
+        }
+        blocks.clear();
+        OfficeTextLayout.append(Collections.singletonList(paragraph), 0, 0, 220, blocks, true);
+        layout = blocks.get(0).layout;
+        PptxRenderingChecks.check(layout.getLineCount() == 3, "Mixed sizes retain explicit line breaks");
+        PptxRenderingChecks.check(layout.getLineBottom(2) - layout.getLineTop(2) == firstHeight,
+            "Small line after large text returns to its own font metrics");
+        PptxRenderingChecks.check(layout.getLineBottom(1) - layout.getLineTop(1) > firstHeight * 1.5f,
+            "Large text retains its own leading");
     }
 
     private static void validate(OfficeDocument document) {
