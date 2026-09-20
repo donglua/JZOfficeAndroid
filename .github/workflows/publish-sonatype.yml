@@ -54,8 +54,11 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '25'
+          java-version: '21'
           cache: gradle
+
+      - name: Set Gradle JVM for documentation generation
+        run: printf 'toolchainVersion=21\n' > gradle/gradle-daemon-jvm.properties
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
