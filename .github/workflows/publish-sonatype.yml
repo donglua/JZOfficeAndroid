@@ -21,6 +21,8 @@ concurrency:
 jobs:
   publish:
     name: Publish release AAR
+    permissions:
+      contents: write
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'release' && !github.event.release.draft && !github.event.release.prerelease)
@@ -99,3 +101,14 @@ jobs:
           SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
         run: >-
           ./gradlew --no-daemon --stacktrace :viewer:publishToSonatype -PsonatypePublishingType=automatic
+
+      - name: Attach AAR to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || format('v{0}', steps.version.outputs.version) }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          asset="$RUNNER_TEMP/viewer-$RELEASE_VERSION.aar"
+          cp viewer/build/outputs/aar/viewer-release.aar "$asset"
+          gh release upload "$RELEASE_TAG" "$asset"

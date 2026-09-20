@@ -61,7 +61,7 @@ dependencies {
 }
 ```
 
-离线接入可以把构建得到的 AAR 放入现有项目的 `libs` 目录，再用 `implementation(files("libs/viewer-release.aar"))` 引用。
+离线接入可以从 [GitHub Release](https://github.com/donglua/JZOfficeAndroid/releases/tag/v0.1.0) 的 Assets 下载 `viewer-0.1.0.aar`，放入应用模块的 `libs` 目录，再用 `implementation(files("libs/viewer-0.1.0.aar"))` 引用。源码构建的产物名为 `viewer-release.aar`。
 
 ```kotlin
 import cn.jingzhuan.lib.office.OfficePreviewView
@@ -232,9 +232,9 @@ signing.password=<gpg-passphrase>
 
 工作流监听 `release.released`，也支持将预发布版转为正式版，但 tag 仍须符合上述格式。任务会完成 Rust 检查、构建 release AAR、生成 sources/Javadoc、签名并上传 Sonatype；Sonatype 验证通过后自动发布 Maven Central，无需手动点击 Publish。部署状态可在 [Central Portal](https://central.sonatype.com/publishing) 查看。
 
-当前工作流将产物发布到 Maven Central，不自动向 GitHub Release 附加 AAR 或 Demo APK。
+工作流提交 Sonatype 发布后，会将同次构建的 AAR 以 `viewer-<版本号>.aar` 上传到对应 GitHub Release 的 Assets；Demo APK 仍需自行构建。
 
-也可以在 Actions 中手动运行 **Publish viewer to Sonatype Central**，选择包含最新工作流的 `main` 分支，输入版本号（例如 `0.1.1` 或 `v0.1.1`）。手动入口固定检出已存在的 `v0.1.1` 标签，并自动发布该标签源码；所选工作流分支不改变发布源码。此方式可用于修复 CI 后重试尚未成功的发布，不要重用已发布到 Maven Central 的版本号。Release 的事件语义见 [GitHub 文档](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#release)，自动发布模式见 [Sonatype 文档](https://central.sonatype.org/publish/publish-portal-ossrh-staging-api/#post-to-manualuploaddefaultrepositorynamespace)。
+也可以在 Actions 中手动运行 **Publish viewer to Sonatype Central**，选择包含最新工作流的 `main` 分支，输入版本号（例如 `0.1.1` 或 `v0.1.1`）。运行前需已创建对应的 `v0.1.1` 标签和 GitHub Release。手动入口固定检出该标签并发布其源码；所选工作流分支不改变发布源码。此方式可用于修复 CI 后重试尚未成功的发布，不要重用已发布到 Maven Central 的版本号。若只有附件上传失败，可直接补传 AAR，无需重新发布 Maven 版本。Release 的事件语义见 [GitHub 文档](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#release)，自动发布模式见 [Sonatype 文档](https://central.sonatype.org/publish/publish-portal-ossrh-staging-api/#post-to-manualuploaddefaultrepositorynamespace)。
 
 ### 本地发布
 
