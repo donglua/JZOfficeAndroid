@@ -12,7 +12,6 @@
 | `viewer/` | Android AAR：URI 读取、图片解码、文字排版、Canvas 绘制、滚动与缩放 |
 | `viewer/native/` | `jz-office-android`：JNI 桥接，生成 `libjz_office.so` |
 | `demo/` | 系统文件选择器和 `ACTION_VIEW` 接入示例 |
-| `baseline/` | 同构建配置的空应用，用于估算接入后的 APK 增量 |
 | `samples/` | 可复现的 DOCX/PPTX/XLSX 测试样例 |
 
 `core` 不依赖 Android，不持有 `Context`、`Uri`、`Bitmap` 或 JNI 对象。坐标、尺寸、字号统一使用 point。图片以 ZIP 包内路径引用；Android 层从同一份私有缓存读取图片。

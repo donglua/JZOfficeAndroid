@@ -6,4 +6,4 @@ dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
 rootProject.name = 'JZOfficeAndroid'
-include ':viewer', ':demo', ':baseline'
+include ':viewer', ':demo'
