@@ -11,7 +11,7 @@ final class DocumentDecoder {
     static OfficeDocument decode(String json) throws IOException {
         try {
             JSONObject root = new JSONObject(json);
-            if (root.getInt("schemaVersion") != 7) throw new IOException("Unsupported core model version");
+            if (root.getInt("schemaVersion") != 8) throw new IOException("Unsupported core model version");
             OfficeDocument document = new OfficeDocument();
             document.kind = OfficeDocument.Kind.valueOf(root.getString("kind"));
             document.width = (float) root.getDouble("width");
@@ -150,6 +150,7 @@ final class DocumentDecoder {
         e.strokeWidth = (float) json.getDouble("strokeWidth");
         e.fillGradient = gradient(json.optJSONObject("fillGradient"));
         e.verticalAlignment = OfficeDocument.VerticalAlignment.valueOf(json.getString("verticalAlignment"));
+        e.textWrap = json.getBoolean("textWrap");
         JSONObject crop = json.optJSONObject("imageCrop");
         if (crop != null) {
             e.imageCrop = new OfficeDocument.ImageCrop();

@@ -22,11 +22,19 @@ final class OfficeTextLayout {
     }
 
     static float append(List<OfficeDocument.Paragraph> paragraphs, float x, float y, float width, List<Block> out, boolean pptx) {
+        return append(paragraphs, x, y, width, out, pptx, true);
+    }
+
+    static float append(List<OfficeDocument.Paragraph> paragraphs, float x, float y, float width, List<Block> out, boolean pptx, boolean wrap) {
         for (OfficeDocument.Paragraph paragraph : paragraphs) {
             y += Math.max(0, paragraph.before);
             Block block = new Block();
             block.x = x; block.y = y;
-            block.layout = paragraph(paragraph, width, pptx);
+            block.layout = paragraph(paragraph, width, pptx, wrap);
+            if (!wrap) {
+                float extra = Math.max(1, (int) width) - block.layout.getWidth();
+                block.x += paragraph.alignment == 1 ? extra / 2 : paragraph.alignment == 2 ? extra : 0;
+            }
             out.add(block);
             y += block.layout.getHeight() + Math.max(0, paragraph.after);
         }
@@ -34,10 +42,10 @@ final class OfficeTextLayout {
     }
 
     static StaticLayout paragraph(OfficeDocument.Paragraph paragraph, float width) {
-        return paragraph(paragraph, width, false);
+        return paragraph(paragraph, width, false, true);
     }
 
-    private static StaticLayout paragraph(OfficeDocument.Paragraph paragraph, float width, boolean pptx) {
+    private static StaticLayout paragraph(OfficeDocument.Paragraph paragraph, float width, boolean pptx, boolean wrap) {
         SpannableStringBuilder text = new SpannableStringBuilder(paragraph.bullet);
         for (OfficeDocument.Run run : paragraph.runs) {
             int start = text.length(); text.append(run.text);
@@ -60,6 +68,10 @@ final class OfficeTextLayout {
         int right = Math.max(0, Math.min(layoutWidth - 1, Math.round(paragraph.rightIndent)));
         int rest = Math.max(0, Math.min(layoutWidth - right - 1, Math.round(paragraph.indent)));
         int first = Math.max(0, Math.min(layoutWidth - right - 1, Math.round(paragraph.indent + paragraph.firstLineIndent)));
+        if (!wrap) {
+            layoutWidth = Math.max(layoutWidth,
+                (int) Math.ceil(Layout.getDesiredWidth(text, font) + Math.max(first, rest) + right));
+        }
         StaticLayout.Builder builder = StaticLayout.Builder.obtain(text, 0, text.length(), font, layoutWidth)
             .setAlignment(align).setIncludePad(false)
             .setIndents(new int[] {first, rest}, new int[] {right});

@@ -90,7 +90,7 @@ pub struct Document {
 impl Document {
     pub fn new(kind: Kind) -> Self {
         Self {
-            schema_version: 7,
+            schema_version: 8,
             kind,
             width: 595.0,
             pages: Vec::new(),
@@ -136,6 +136,7 @@ pub struct Element {
     pub image: Option<String>,
     pub image_crop: Option<ImageCrop>,
     pub vertical_alignment: VerticalAlignment,
+    pub text_wrap: bool,
     pub paragraphs: Vec<Paragraph>,
     pub rows: Vec<Vec<Vec<Paragraph>>>,
     pub column_widths: Vec<f32>,
@@ -163,6 +164,7 @@ impl Default for Element {
             image: None,
             image_crop: None,
             vertical_alignment: VerticalAlignment::Top,
+            text_wrap: true,
             paragraphs: Vec::new(),
             rows: Vec::new(),
             column_widths: Vec::new(),

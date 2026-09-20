@@ -16,6 +16,7 @@ final class PptxTextChecks {
     static String run(OfficeInstrumentation instrumentation) throws Exception {
         Context context = instrumentation.getTargetContext();
         instrumentation.runOnMainChecked(PptxTextChecks::multilineSpacing);
+        instrumentation.runOnMainChecked(PptxWrappingChecks::run);
         Uri uri = Uri.parse("content://" + context.getPackageName() + ".fixtures/" + FIXTURE);
         try (OfficePackage source = OfficePackage.open(context, uri)) {
             OfficeDocument document = DocumentDecoder.decode(NativeCore.parse(source.file.getAbsolutePath()));

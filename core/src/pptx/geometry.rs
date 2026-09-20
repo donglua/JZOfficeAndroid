@@ -120,6 +120,7 @@ impl Bounds {
     pub fn text_element(self, chain: &[&Node], doc: &mut Document) -> Option<Element> {
         let (mut left, mut right, mut top, mut bottom) = (7.2, 7.2, 3.6, 3.6);
         let mut vertical_alignment = VerticalAlignment::Top;
+        let mut text_wrap = true;
         for shape in chain {
             let Some(body) = shape.child("txBody").and_then(|b| b.child("bodyPr")) else {
                 continue;
@@ -142,8 +143,13 @@ impl Bounds {
             if !matches!(body.attr("vert"), "" | "horz") || number(body.attr("rot"), 0.0) != 0.0 {
                 doc.warn("PPTX vertical text and independent text rotation are not supported.");
             }
-            if !matches!(body.attr("numCol"), "" | "1") || body.attr("wrap") == "none" {
-                doc.warn("PPTX text uses one wrapped column.");
+            match body.attr("wrap") {
+                "none" => text_wrap = false,
+                "square" => text_wrap = true,
+                _ => (),
+            }
+            if !matches!(body.attr("numCol"), "" | "1") {
+                doc.warn("PPTX text uses one column.");
             }
             if ["spAutoFit", "prstTxWarp"]
                 .iter()
@@ -178,6 +184,7 @@ impl Bounds {
             height,
             padding: 0.0,
             vertical_alignment,
+            text_wrap,
             flip_h: false,
             flip_v: false,
             ..self.element(ElementType::TEXT)

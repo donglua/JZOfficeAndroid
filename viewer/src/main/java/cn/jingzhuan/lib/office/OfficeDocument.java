@@ -38,6 +38,7 @@ final class OfficeDocument {
         String image;
         ImageCrop imageCrop;
         VerticalAlignment verticalAlignment = VerticalAlignment.TOP;
+        boolean textWrap = true;
         final List<Paragraph> paragraphs = new ArrayList<>();
         final List<List<List<Paragraph>>> rows = new ArrayList<>();
         final List<Float> columnWidths = new ArrayList<>();

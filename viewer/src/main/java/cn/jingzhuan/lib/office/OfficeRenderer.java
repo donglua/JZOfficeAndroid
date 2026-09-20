@@ -119,7 +119,7 @@ final class OfficeRenderer {
         } else if (!source.paragraphs.isEmpty()) {
             float padding = flow ? 0 : Math.max(0, source.padding);
             float textHeight = OfficeTextLayout.append(source.paragraphs, padding, padding,
-                Math.max(1, d.width - 2 * padding), d.texts, !flow) + padding;
+                Math.max(1, d.width - 2 * padding), d.texts, !flow, flow || source.textWrap) + padding;
             if (flow) d.height = Math.max(1, textHeight);
             else {
                 if (textHeight > d.height + 1) document.warn("Text exceeds its slide box and is clipped");
@@ -155,6 +155,9 @@ final class OfficeRenderer {
         d.transform.preScale(e.flipH ? -1 : 1, e.flipV ? -1 : 1, d.width / 2, d.height / 2);
         float stroke = (e.stroke >>> 24) == 0 ? 0 : Math.max(0, e.strokeWidth) / 2;
         d.bounds.set(-stroke, -stroke, d.width + stroke, d.height + stroke);
+        if (!e.textWrap) for (OfficeTextLayout.Block block : d.texts) {
+            d.bounds.union(block.x, block.y, block.x + block.layout.getWidth(), block.y + block.layout.getHeight());
+        }
         d.transform.mapRect(d.bounds);
     }
 
@@ -223,6 +226,10 @@ final class OfficeRenderer {
             for (OfficeTextLayout.Block block : d.texts) {
                 textBounds.top = Math.min(textBounds.top, block.y);
                 textBounds.bottom = Math.max(textBounds.bottom, block.y + block.layout.getHeight());
+                if (!e.textWrap) {
+                    textBounds.left = Math.min(textBounds.left, block.x);
+                    textBounds.right = Math.max(textBounds.right, block.x + block.layout.getWidth());
+                }
             }
             canvas.clipRect(textBounds);
         } else canvas.clipRect(rect);
