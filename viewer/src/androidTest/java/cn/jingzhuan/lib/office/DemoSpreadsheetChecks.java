@@ -15,7 +15,7 @@ final class DemoSpreadsheetChecks {
 
     static String run(Instrumentation instrumentation) throws Exception {
         String command = "am start -W -n " + PACKAGE + "/.MainActivity -a android.intent.action.VIEW"
-            + " -d file:///data/user/0/" + PACKAGE + "/files/sample.xlsx"
+            + " -d content://" + PACKAGE + ".samples/sample.xlsx"
             + " -t application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
         try (ParcelFileDescriptor descriptor = instrumentation.getUiAutomation().executeShellCommand(command);
              ParcelFileDescriptor.AutoCloseInputStream input = new ParcelFileDescriptor.AutoCloseInputStream(descriptor)) {

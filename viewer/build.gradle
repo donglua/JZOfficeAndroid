@@ -4,6 +4,11 @@ plugins {
     id 'signing'
 }
 
+abstract class GenerateOfficeFixtures extends Exec {
+    @OutputDirectory
+    abstract org.gradle.api.file.DirectoryProperty getOutputDirectory()
+}
+
 group = rootProject.publishedGroupId
 version = rootProject.publishedVersion
 
@@ -35,7 +40,18 @@ if (!officeAbis.every { it in ['arm64-v8a', 'x86_64', 'armeabi-v7a'] }) {
 }
 def nativeOutput = layout.buildDirectory.dir('generated/jniLibs/' + officeAbis.join('_'))
 android.sourceSets.main.jniLibs.srcDir(nativeOutput.get().asFile)
-android.sourceSets.androidTest.assets.srcDir(rootProject.file('samples'))
+def testFixtures = layout.buildDirectory.dir('generated/test-fixtures')
+android.sourceSets.androidTest.assets.srcDir(rootProject.file('demo/src/main/assets'))
+def generateTestFixtures = tasks.register('generateTestFixtures', GenerateOfficeFixtures) {
+    inputs.files(rootProject.fileTree('core/tests/support'), rootProject.file('core/examples/fixtures.rs'), rootProject.file('Cargo.lock'))
+    outputDirectory.set(testFixtures)
+    workingDir rootProject.projectDir
+    commandLine(['cargo', 'run', '-p', 'jz-office-core', '--example', 'fixtures']
+        + (gradle.startParameter.offline ? ['--offline'] : []) + ['--', '--tests', testFixtures.get().asFile.absolutePath])
+}
+androidComponents.onVariants(androidComponents.selector().all()) { variant ->
+    variant.androidTest?.sources?.assets?.addGeneratedSourceDirectory(generateTestFixtures) { it.outputDirectory }
+}
 tasks.register('buildNative', Exec) {
     inputs.files(rootProject.fileTree('core') { exclude 'target/**' }, rootProject.fileTree('viewer/native'), rootProject.file('Cargo.toml'), rootProject.file('Cargo.lock'), rootProject.file('scripts/build-native.sh'))
     inputs.property('abis', officeAbis)

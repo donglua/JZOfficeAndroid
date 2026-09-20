@@ -9,7 +9,7 @@ use std::{
 };
 use support::{
     docx,
-    package::{archive, Parts, TestResult},
+    package::{archive, TestResult},
     pptx, xlsx,
 };
 
@@ -87,19 +87,36 @@ fn output_schema_version_and_serialized_field_names_are_stable() -> TestResult {
 
 #[test]
 fn sample_deliverables_match_rust_generator_and_parse_through_path_api() -> TestResult {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../samples");
-    for (name, parts, expected) in [
-        ("sample.docx", docx::parts(), "DOCX"),
-        ("sample.pptx", pptx::parts(), "PPTX"),
-        ("pptx-compat.pptx", support::pptx_compat::parts(), "PPTX"),
-        ("pptx-charts.pptx", support::pptx_charts::parts(), "PPTX"),
-        ("pptx-colors.pptx", support::pptx_colors::parts(), "PPTX"),
-        ("sample.xlsx", xlsx::parts(), "XLSX"),
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../demo/src/main/assets/samples");
+    let mut names = fs::read_dir(&root)?
+        .map(|entry| entry.map(|entry| entry.file_name()))
+        .collect::<Result<Vec<_>, _>>()?;
+    names.sort();
+    assert_eq!(
+        names,
+        ["sample.docx", "sample.pptx", "sample.xlsx"].map(std::ffi::OsString::from)
+    );
+    for (name, bytes, expected) in [
+        (
+            "sample.docx",
+            archive(&support::docx_showcase::parts())?,
+            "DOCX",
+        ),
+        (
+            "sample.pptx",
+            archive(&support::pptx_showcase::parts()?)?,
+            "PPTX",
+        ),
+        (
+            "sample.xlsx",
+            archive(&support::xlsx_showcase::parts())?,
+            "XLSX",
+        ),
     ] {
         let path = root.join(name);
         assert_eq!(
             fs::read(&path)?,
-            archive(&parts)?,
+            bytes,
             "Regenerate {name} with the fixtures example"
         );
 
@@ -108,7 +125,7 @@ fn sample_deliverables_match_rust_generator_and_parse_through_path_api() -> Test
         assert_eq!(serde_json::to_value(&document.kind)?, expected);
         match document.kind {
             Kind::DOCX => assert!(!document.blocks.is_empty()),
-            Kind::PPTX => assert_eq!(document.pages.len(), 2),
+            Kind::PPTX => assert_eq!(document.pages.len(), 16),
             Kind::XLSX => assert_eq!(document.sheets.len(), 2),
         }
     }
@@ -119,21 +136,31 @@ fn sample_deliverables_match_rust_generator_and_parse_through_path_api() -> Test
 fn samples_have_well_formed_xml_content_types_and_resolvable_relationships() -> TestResult {
     for parts in [
         docx::parts(),
+        support::docx_showcase::parts(),
         pptx::parts(),
         support::pptx_charts::parts(),
         support::pptx_colors::parts(),
+        support::pptx_compat::parts(),
+        support::pptx_typography::parts(),
+        support::pptx_wrapping::parts(),
+        support::pptx_backgrounds::parts(),
         xlsx::parts(),
+        support::xlsx_showcase::parts(),
     ] {
         check_package(&parts)?;
     }
+    check_package(&support::pptx_showcase::parts()?)?;
     Ok(())
 }
 
 #[test]
 fn pptx_color_fixture_matches_solid_reference_through_path_api() -> TestResult {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../samples/pptx-colors.pptx");
+    let source = TemporaryFile::new(
+        "pptx-colors.pptx",
+        &archive(&support::pptx_colors::parts())?,
+    )?;
 
-    let document = parse_path(&path)?;
+    let document = parse_path(&source.path)?;
 
     assert_eq!(document.pages.len(), 2);
     for page in &document.pages {
@@ -154,16 +181,17 @@ fn pptx_color_fixture_matches_solid_reference_through_path_api() -> TestResult {
     Ok(())
 }
 
-fn check_package(parts: &Parts) -> TestResult {
+fn check_package<S: AsRef<str>>(parts: &[(S, Vec<u8>)]) -> TestResult {
     let bytes = archive(parts)?;
     let mut package = Package::new(Cursor::new(bytes))?;
     let types = package.read("[Content_Types].xml", 64 * 1024)?;
     let types = roxmltree::Document::parse(std::str::from_utf8(&types)?)?;
     for (name, bytes) in parts {
+        let name = name.as_ref();
         if name.ends_with(".xml") || name.ends_with(".rels") {
             roxmltree::Document::parse(std::str::from_utf8(bytes)?)?;
         }
-        if *name != "[Content_Types].xml" {
+        if name != "[Content_Types].xml" {
             let absolute = format!("/{name}");
             let extension = name.rsplit('.').next();
             assert!(
@@ -175,7 +203,7 @@ fn check_package(parts: &Parts) -> TestResult {
                 "Missing content type for {name}"
             );
         }
-        let source = if *name == "_rels/.rels" {
+        let source = if name == "_rels/.rels" {
             Some(String::new())
         } else {
             name.split_once("/_rels/").and_then(|(prefix, leaf)| {

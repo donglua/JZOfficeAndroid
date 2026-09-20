@@ -1,59 +1,75 @@
 package cn.jingzhuan.lib.office;
 
+import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.net.Uri;
 import android.text.StaticLayout;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.util.Collections;
 
 final class PptxWrappingChecks {
-    static void run() {
-        for (int alignment = 0; alignment <= 2; alignment++) {
-            OfficeDocument document = new OfficeDocument();
-            document.kind = OfficeDocument.Kind.PPTX; document.width = 600;
-            OfficeDocument.Page page = new OfficeDocument.Page();
-            page.width = 600; page.height = 300; page.background = Color.BLACK;
-            OfficeDocument.Element text = new OfficeDocument.Element();
-            text.x = 200; text.y = 10; text.width = 150; text.height = 80;
-            text.padding = 0; text.textWrap = false;
-            OfficeDocument.Paragraph paragraph = new OfficeDocument.Paragraph();
-            paragraph.alignment = alignment; paragraph.after = 0;
-            for (String part : new String[] {"PART 0", "5"}) {
-                OfficeDocument.Run run = new OfficeDocument.Run();
-                run.text = part; run.size = 60; run.color = Color.WHITE;
-                paragraph.runs.add(run);
-            }
-            text.paragraphs.add(paragraph); page.elements.add(text); document.pages.add(page);
-            OfficeRenderer renderer = new OfficeRenderer(); renderer.layout(document);
-            OfficeRenderer.Element drawn = renderer.pages.get(0).elements.get(0);
+    private static final String FIXTURE = "pptx-wrapping.pptx";
+
+    static void run(OfficeInstrumentation instrumentation) throws Exception {
+        Context context = instrumentation.getTargetContext();
+        Uri uri = Uri.parse("content://" + context.getPackageName() + ".fixtures/" + FIXTURE);
+        try (OfficePackage source = OfficePackage.open(context, uri)) {
+            OfficeDocument document = DocumentDecoder.decode(NativeCore.parse(source.file.getAbsolutePath()));
+            check(document.kind == OfficeDocument.Kind.PPTX && document.pages.size() == 9,
+                "Wrapping sample contains three break modes for each alignment");
+            instrumentation.runOnMainChecked(() -> capture(context, document));
+        }
+    }
+
+    private static void capture(Context context, OfficeDocument document) throws Exception {
+        OfficeRenderer renderer = new OfficeRenderer();
+        renderer.layout(document);
+        for (int index = 0; index < document.pages.size(); index++) {
+            int alignment = index / 3;
+            int mode = index % 3;
+            OfficeRenderer.Page page = renderer.pages.get(index);
+            OfficeRenderer.Element drawn = page.elements.get(0);
+            OfficeDocument.Element text = drawn.source;
+            check(text.type == OfficeDocument.Type.TEXT && text.paragraphs.get(0).runs.size() == 2,
+                "Parsed wrapping sample retains mixed runs");
+            check(text.paragraphs.get(0).alignment == alignment, "Parsed paragraph alignment " + alignment);
+            check(text.textWrap == (mode == 2), "Parsed wrapping mode " + mode);
             OfficeTextLayout.Block block = drawn.texts.get(0);
             StaticLayout layout = block.layout;
-            check(layout.getLineCount() == 1, "Unwrapped text retains one line across runs");
-            check(layout.getHeight() <= text.height, "PART 05 stays above its following title");
             float left = block.x + layout.getLineLeft(0), right = block.x + layout.getLineRight(0);
-            float anchor = alignment == 0 ? left : alignment == 1 ? (left + right) / 2 : right;
-            float expected = alignment == 0 ? 0 : alignment == 1 ? text.width / 2 : text.width;
-            check(Math.abs(anchor - expected) <= 1, "Unwrapped paragraph preserves alignment " + alignment);
-            Bitmap frame = Bitmap.createBitmap(600, 300, Bitmap.Config.ARGB_8888);
-            try {
-                renderer.draw(new Canvas(frame), 0, 300, Collections.emptyMap());
-                int overflowPixels = 0;
-                for (int y = 10; y < 90; y++) for (int x = 0; x < 600; x++) {
-                    if ((x < text.x || x >= text.x + text.width) && Color.red(frame.getPixel(x, y)) > 200) overflowPixels++;
-                }
-                check(overflowPixels > 100, "Unwrapped overflow remains visible outside original shape width");
+            if (mode == 0) {
+                check(layout.getLineCount() == 1, "Unwrapped text retains one line across runs");
+                check(layout.getHeight() <= text.height, "PART 05 stays above its following title");
+                float anchor = alignment == 0 ? left : alignment == 1 ? (left + right) / 2 : right;
+                float expected = alignment == 0 ? 0 : alignment == 1 ? text.width / 2 : text.width;
+                check(Math.abs(anchor - expected) <= 1, "Unwrapped paragraph preserves alignment " + alignment);
                 check(drawn.bounds.left <= text.x + left && drawn.bounds.right >= text.x + right,
                     "Visibility bounds include unwrapped text");
+            } else if (mode == 1) {
+                check(layout.getLineCount() == 2, "Unwrapped text preserves explicit line breaks");
+            } else {
+                check(layout.getLineCount() > 1, "Ordinary text still wraps");
+            }
+            Bitmap frame = Bitmap.createBitmap(600, 300, Bitmap.Config.ARGB_8888);
+            try {
+                Canvas canvas = new Canvas(frame);
+                canvas.translate(0, -page.y);
+                renderer.draw(canvas, page.y, page.y + page.height, Collections.emptyMap());
+                if (mode == 0) {
+                    int overflowPixels = 0;
+                    for (int y = 10; y < 90; y++) for (int x = 0; x < 600; x++) {
+                        if ((x < text.x || x >= text.x + text.width) && Color.red(frame.getPixel(x, y)) > 200) overflowPixels++;
+                    }
+                    check(overflowPixels > 100, "Unwrapped overflow remains visible outside original shape width");
+                }
+                File file = new File(context.getFilesDir(), "pptx-wrapping-page" + (index + 1) + ".png");
+                try (FileOutputStream output = new FileOutputStream(file)) {
+                    check(frame.compress(Bitmap.CompressFormat.PNG, 100, output), "Saved " + file.getName());
+                }
             } finally { frame.recycle(); }
-            paragraph.runs.get(0).text = "PART\n0";
-            renderer.layout(document);
-            check(renderer.pages.get(0).elements.get(0).texts.get(0).layout.getLineCount() == 2,
-                "Unwrapped text preserves explicit line breaks");
-            paragraph.runs.get(0).text = "PART 0";
-            text.textWrap = true;
-            renderer.layout(document);
-            check(renderer.pages.get(0).elements.get(0).texts.get(0).layout.getLineCount() > 1,
-                "Ordinary text still wraps");
         }
     }
 

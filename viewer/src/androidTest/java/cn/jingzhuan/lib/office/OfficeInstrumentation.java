@@ -21,6 +21,7 @@ public final class OfficeInstrumentation extends Instrumentation {
     private PreviewTestActivity activity;
     private final StringBuilder results = new StringBuilder();
     private boolean layoutOnly, limitsOnly, imagesOnly, xlsxOnly, demoOnly, pptxOnly, pathsOnly, tablesOnly, backgroundsOnly;
+    private boolean demoSamplesOnly;
 
     @Override public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
@@ -29,6 +30,7 @@ public final class OfficeInstrumentation extends Instrumentation {
         imagesOnly = arguments != null && "images".equals(arguments.getString("suite"));
         xlsxOnly = arguments != null && "xlsx".equals(arguments.getString("suite"));
         demoOnly = arguments != null && "demo-xlsx".equals(arguments.getString("suite"));
+        demoSamplesOnly = arguments != null && "demo-samples".equals(arguments.getString("suite"));
         pptxOnly = arguments != null && "pptx".equals(arguments.getString("suite"));
         pathsOnly = arguments != null && "paths".equals(arguments.getString("suite"));
         tablesOnly = arguments != null && "tables".equals(arguments.getString("suite"));
@@ -38,6 +40,12 @@ public final class OfficeInstrumentation extends Instrumentation {
     @Override public void onStart() {
         Bundle output = new Bundle();
         try {
+            if (demoSamplesOnly) {
+                results.append(DemoSampleChecks.run(this));
+                output.putString("stream", "\n" + results + "ALL DEMO SAMPLE CHECKS PASSED\n");
+                finish(Activity.RESULT_OK, output);
+                return;
+            }
             if (backgroundsOnly) {
                 results.append(PptxBackgroundChecks.run(this));
                 output.putString("stream", "\n" + results + "ALL BACKGROUND CHECKS PASSED\n");

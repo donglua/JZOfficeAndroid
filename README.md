@@ -11,8 +11,8 @@
 | `core/` | `jz-office-core`：ZIP/OOXML、关系解析、基础样式、平台无关文档模型 |
 | `viewer/` | Android AAR：URI 读取、图片解码、文字排版、Canvas 绘制、滚动与缩放 |
 | `viewer/native/` | `jz-office-android`：JNI 桥接，生成 `libjz_office.so` |
-| `demo/` | 系统文件选择器和 `ACTION_VIEW` 接入示例 |
-| `samples/` | 可复现的 DOCX/PPTX/XLSX 测试样例 |
+| `demo/` | 内置样例、系统文件选择器和 `ACTION_VIEW` 接入示例 |
+| `demo/src/main/assets/samples/` | 每种格式一个综合样例，展示现有样例覆盖的场景 |
 
 `core` 不依赖 Android，不持有 `Context`、`Uri`、`Bitmap` 或 JNI 对象。坐标、尺寸、字号统一使用 point。图片以 ZIP 包内路径引用；Android 层从同一份私有缓存读取图片。
 
@@ -230,7 +230,7 @@ let document = jz_office_core::parse_path(std::path::Path::new("sample.docx"))?;
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all -- --check
-cargo run -p jz-office-core --example fixtures -- samples
+cargo run -p jz-office-core --example fixtures
 ./gradlew :viewer:assembleDebugAndroidTest
 adb install -r viewer/build/outputs/apk/androidTest/debug/viewer-debug-androidTest.apk
 adb shell am instrument -w cn.jingzhuan.lib.office.test/cn.jingzhuan.lib.office.OfficeInstrumentation
@@ -238,22 +238,36 @@ adb shell am instrument -w cn.jingzhuan.lib.office.test/cn.jingzhuan.lib.office.
 
 设备测试使用自定义 Instrumentation，以输出 `ALL CHECKS PASSED` 为通过标志。覆盖无真实路径、无文件长度的管道型 `content://`，DOCX/PPTX/XLSX 渲染、双击缩放、错误回调、URI 切换、临时文件清理和不同尺寸的截图。
 
+Demo 启动时显示样例列表，打开文档后可点击工具栏的「Open sample」重新选择。列表直接读取 `demo/src/main/assets/samples/`，通过 Demo 私有的 `content://` provider 打开文档。该目录只保留以下三个文件，打入 Demo APK 和测试 APK，不进入 viewer AAR。
+
+| 文件 | 内容 |
+| --- | --- |
+| `sample.pptx` | 16 页：中文目录、基础元素、组合变换、折线图、文字填色、字体排版、换行对照、背景与透明图片；每页标明条件与预期 |
+| `sample.docx` | 6 个章节：文字样式、Tab/显式换行、图片、表格、行距、缩进与对齐；用短例句说明设置与效果 |
+| `sample.xlsx` | Overview、Data 两个工作表：条件/实际/预期对照、合并样式、公式缓存、格式化及稀疏滚动坐标尺 |
+
+样例生成器位于 `core/examples/fixtures.rs`，生成逻辑复用 `core/tests/support/`。默认生成三个综合文档，也可在命令后指定输出目录。PPTX 合并时保留各组主题、母版、媒体与图表关系，统一为 960 × 540 point 页面。
+
+第 11–13 页将 9 种换行案例合为 3 页对照：分别采用左对齐、居中对齐、右对齐，每页并列展示不自动换行、显式换行和按框宽自动换行。青色边框标出原始文本框，各栏复用专项文件中的文本定义。其余案例页在青色框内保留原有元素，右侧说明展示条件与预期效果；第 14–16 页展示背景与透明图片。渐变文字与纯色参照保留两种输入，并明确当前预览使用代表色。
+
+DOCX 的 8 种段落案例各保留两行，便于比较行距、缩进和右对齐。XLSX 在同一行并列展示原值条件、实际结果及预期；Overview 的下半部仅作为滚动坐标尺，每 10 行给出横向刻度，终点为 L120。
+
+专项设备测试使用同一套生成代码产出小文档，以便定位失败场景。Gradle 在打包测试 APK 前自动生成到 `viewer/build/generated/test-fixtures/`；可运行 `cargo run -p jz-office-core --example fixtures -- --tests` 手动生成。它们不进入 Demo APK。新增渲染案例应同时纳入综合样例和专项断言；无效输入、资源限制和交互状态仍由代码测试覆盖。
+
 XLSX 专项使用 `-e suite xlsx`，以 `ALL XLSX CHECKS PASSED` 为通过标志，覆盖管道 URI、表名顺序、切表与页码、双向滚动、缩放、快速换文件、合并区域、隐藏行列和有界文字布局缓存。
 
 ```sh
 adb shell am instrument -w -e suite xlsx cn.jingzhuan.lib.office.test/cn.jingzhuan.lib.office.OfficeInstrumentation
 ```
 
-Demo 标签检查需要先安装 Debug Demo 和测试 APK，并把仓库样例放入 Demo 私有文件目录。该检查通过无障碍点击切换工作表，断言选中状态与页码并保存实际窗口截图；它不替代系统触摸注入检查。
+Demo 标签检查需要先安装 Debug Demo 和测试 APK，使用内置工作簿。该检查通过无障碍点击切换工作表，断言选中状态与页码并保存实际窗口截图；它不替代系统触摸注入检查。
 
 ```sh
 adb install -r demo/build/outputs/apk/debug/demo-debug.apk
-adb shell run-as cn.jingzhuan.lib.office.demo mkdir -p files
-adb exec-in run-as cn.jingzhuan.lib.office.demo tee files/sample.xlsx < samples/sample.xlsx > /dev/null
 adb shell am instrument -w -e suite demo-xlsx cn.jingzhuan.lib.office.test/cn.jingzhuan.lib.office.OfficeInstrumentation
 ```
 
-通过标志为 `ALL DEMO XLSX CHECKS PASSED`。
+通过标志为 `ALL DEMO XLSX CHECKS PASSED`。样例入口检查使用 `-e suite demo-samples`，逐个选择内置文档、核对格式与页码、翻页并保存截图，通过标志为 `ALL DEMO SAMPLE CHECKS PASSED`。
 
 仅运行新增排版、图片裁剪和页码接口检查时，增加 `-e suite layout`，以 `ALL LAYOUT CHECKS PASSED` 为通过标志。该组检查包含真实 `StaticLayout` 坐标、Canvas 像素、窗口截图、拖动页码、布局前跳转和错误状态；完整测试仍保留独立的系统触摸注入用例。
 
@@ -282,11 +296,13 @@ Android 仅缓存可见区域的图片，离屏时移除缓存引用，返回该
 
 图片缓存回归使用 `-e suite images`，以 `ALL IMAGE CHECKS PASSED` 为通过标志。覆盖大小图片混合时的预算分配、优先级变化与清晰度升级、放大后的单像素细节，以及超过 96 MiB 的 16 页 PPTX 加载、跳页、拖动、返回、累计超过 256 MiB 的图片重复读取、离屏缓存释放、重新挂载、快速换文件和清理。
 
-PPTX 兼容性回归使用 `-e suite pptx`，通过标志为 `ALL PPTX CHECKS PASSED`。样例 `samples/pptx-compat.pptx` 包含嵌套组合、旋转、翻转图片、缩字段落，以及使用 635 倍坐标换算的细描边和文字；检查组合坐标、Canvas 像素、行距与缩进、可见图片缓存，以及缩放和跳页。该入口不会执行完整测试组。
+PPTX 兼容性回归使用 `-e suite pptx`，通过标志为 `ALL PPTX CHECKS PASSED`。自动生成的 `pptx-compat.pptx` 包含嵌套组合、旋转、翻转图片、缩字段落，以及使用 635 倍坐标换算的细描边和文字；检查组合坐标、Canvas 像素、行距与缩进、可见图片缓存，以及缩放和跳页。对应内容也合入 Demo 的 `sample.pptx`。该入口不会执行完整测试组。
 
-同一入口包含 `samples/pptx-charts.pptx`：两页分类/日期折线图，使用缓存数据并引用不存在的外部 CSV；通过 JNI/管道 URI 加载，检查曲线像素、标题、边界及两种尺寸的截图。该样例仅打入测试 APK。
+同一入口包含 `pptx-charts.pptx`：两页分类/日期折线图，使用缓存数据并引用不存在的外部 CSV；通过 JNI/管道 URI 加载，检查曲线像素、标题、边界及两种尺寸的截图。
 
-`samples/pptx-colors.pptx` 包含红底渐变标题及等效纯色参照页。通过管道 URI/JNI 检查主题色与亮度变换结果，并在两种尺寸下检查金色文字像素和错误黑色像素。该样例仅打入测试 APK。
+`pptx-colors.pptx` 包含红底渐变标题及等效纯色参照页。通过管道 URI/JNI 检查主题色与亮度变换结果，并在两种尺寸下检查金色文字像素和错误黑色像素。
+
+`pptx-wrapping.pptx` 覆盖左、中、右对齐下的不换行、显式断行和普通换行；`pptx-backgrounds.pptx` 覆盖继承渐变背景、透明 PNG、纯色页及旋转/翻转图形的背景填充。两组专项检查保留行数、对齐、溢出和背景像素断言；这些场景也合入综合 PPTX。
 
 ```sh
 adb shell am instrument -w -e suite pptx cn.jingzhuan.lib.office.test/cn.jingzhuan.lib.office.OfficeInstrumentation

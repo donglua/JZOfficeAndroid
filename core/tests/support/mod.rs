@@ -1,12 +1,20 @@
 #[cfg(test)]
 pub mod checks;
 pub mod docx;
+pub mod docx_showcase;
 pub mod package;
 pub mod pptx;
+pub mod pptx_backgrounds;
 pub mod pptx_charts;
 pub mod pptx_colors;
 pub mod pptx_compat;
 mod pptx_shapes;
+pub mod pptx_showcase;
+mod pptx_showcase_notes;
+mod pptx_showcase_xml;
 mod pptx_theme;
 pub mod pptx_typography;
+pub mod pptx_wrapping;
+pub mod pptx_wrapping_showcase;
 pub mod xlsx;
+pub mod xlsx_showcase;

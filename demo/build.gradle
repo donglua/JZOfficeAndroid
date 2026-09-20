@@ -3,6 +3,9 @@ android {
     enableKotlin = false
     namespace 'cn.jingzhuan.lib.office.demo'
     compileSdk 35
+    androidResources {
+        noCompress += ['docx', 'pptx', 'xlsx']
+    }
     defaultConfig {
         applicationId 'cn.jingzhuan.lib.office.demo'
         minSdk 23

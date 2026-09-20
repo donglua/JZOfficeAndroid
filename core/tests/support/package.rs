@@ -12,13 +12,13 @@ pub const PNG: &[u8] = &[
     0x44, 0xae, 0x42, 0x60, 0x82,
 ];
 
-pub fn archive(parts: &Parts) -> TestResult<Vec<u8>> {
+pub fn archive<S: AsRef<str>>(parts: &[(S, Vec<u8>)]) -> TestResult<Vec<u8>> {
     let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
     let options = SimpleFileOptions::default()
         .compression_method(CompressionMethod::Deflated)
         .last_modified_time(zip::DateTime::default());
     for (name, bytes) in parts {
-        writer.start_file(*name, options)?;
+        writer.start_file(name.as_ref(), options)?;
         writer.write_all(bytes)?;
     }
     Ok(writer.finish()?.into_inner())

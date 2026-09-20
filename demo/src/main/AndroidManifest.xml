@@ -1,5 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application android:label="JZ Office" android:allowBackup="false" android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <provider android:name=".SampleProvider" android:authorities="${applicationId}.samples" android:exported="false" />
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

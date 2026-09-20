@@ -35,6 +35,7 @@ public final class MainActivity extends Activity {
         title = new TextView(this); title.setText("JZ Office"); title.setTextSize(18); title.setTextColor(0xff25282d); title.setSingleLine(true); title.setEllipsize(android.text.TextUtils.TruncateAt.END);
         toolbar.addView(title, new LinearLayout.LayoutParams(0, dp(56), 1)); title.setGravity(Gravity.CENTER_VERTICAL);
         toolbar.addView(button(R.drawable.ic_office_open, "Open document", v -> pick()));
+        toolbar.addView(button(R.drawable.ic_office_samples, "Open sample", v -> showSamples()));
         toolbar.addView(button(R.drawable.ic_office_fit, "Reset zoom", v -> preview.resetZoom()));
         previous = button(R.drawable.ic_office_previous, "Previous slide", v -> preview.jumpToPage(preview.getCurrentPage() - 1));
         next = button(R.drawable.ic_office_next, "Next slide", v -> preview.jumpToPage(preview.getCurrentPage() + 1));
@@ -48,6 +49,7 @@ public final class MainActivity extends Activity {
         setContentView(root);
         if (saved != null && saved.getString("uri") != null) open(Uri.parse(saved.getString("uri")));
         else if (getIntent().getData() != null) open(getIntent().getData());
+        else showSamples();
     }
 
     private ImageButton button(int icon, String label, View.OnClickListener action) {
@@ -68,6 +70,19 @@ public final class MainActivity extends Activity {
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         });
         startActivityForResult(intent, PICK_DOCUMENT);
+    }
+
+    private void showSamples() {
+        try {
+            String[] names = SampleProvider.names(this);
+            new AlertDialog.Builder(this).setTitle("Samples")
+                .setItems(names, (dialog, which) -> open(new Uri.Builder().scheme("content")
+                    .authority(getPackageName() + ".samples").appendPath(names[which]).build()))
+                .setNegativeButton(android.R.string.cancel, null).show();
+        } catch (java.io.IOException error) {
+            new AlertDialog.Builder(this).setTitle("Samples").setMessage(error.getMessage())
+                .setPositiveButton(android.R.string.ok, null).show();
+        }
     }
 
     @Override protected void onActivityResult(int request, int result, Intent data) {

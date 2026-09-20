@@ -20,7 +20,7 @@ public final class StreamProvider extends ContentProvider {
         cursor.addRow(new Object[] {"opaque-document", null}); return cursor;
     }
     @Override public ParcelFileDescriptor openFile(Uri uri, String mode) throws FileNotFoundException {
-        String name = uri.getLastPathSegment();
+        String name = android.text.TextUtils.join("/", uri.getPathSegments());
         if ("missing".equals(name)) throw new FileNotFoundException("Missing fixture");
         if (!"r".equals(mode)) throw new FileNotFoundException("Read only");
         try {
