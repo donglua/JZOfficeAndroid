@@ -51,7 +51,8 @@ final class OfficeTextLayout {
             int start = text.length(); text.append(run.text);
             if (start == text.length()) continue;
             int flags = Spanned.SPAN_EXCLUSIVE_EXCLUSIVE;
-            text.setSpan(new AbsoluteSizeSpan(Math.max(1, Math.round(run.size))), start, text.length(), flags);
+            text.setSpan(pptx ? new FontSize(run.size) : new AbsoluteSizeSpan(Math.max(1, Math.round(run.size))),
+                start, text.length(), flags);
             text.setSpan(new ForegroundColorSpan(run.color), start, text.length(), flags);
             int style = (run.bold ? Typeface.BOLD : 0) | (run.italic ? Typeface.ITALIC : 0);
             if (!run.fontFace.isEmpty()) text.setSpan(new FontFace(run.fontFace, style), start, text.length(), flags);
@@ -86,6 +87,15 @@ final class OfficeTextLayout {
                 0, text.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         }
         return builder.build();
+    }
+
+    private static final class FontSize extends MetricAffectingSpan {
+        private final float size;
+
+        FontSize(float size) { this.size = Math.max(1, size); }
+
+        @Override public void updateMeasureState(TextPaint paint) { paint.setTextSize(size); }
+        @Override public void updateDrawState(TextPaint paint) { paint.setTextSize(size); }
     }
 
     private static final class FontFace extends MetricAffectingSpan {

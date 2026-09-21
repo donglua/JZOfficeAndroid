@@ -16,6 +16,7 @@ final class PptxTextChecks {
     static String run(OfficeInstrumentation instrumentation) throws Exception {
         Context context = instrumentation.getTargetContext();
         instrumentation.runOnMainChecked(PptxTextChecks::multilineSpacing);
+        sampleTitle(instrumentation);
         PptxWrappingChecks.run(instrumentation);
         Uri uri = Uri.parse("content://" + context.getPackageName() + ".fixtures/" + FIXTURE);
         try (OfficePackage source = OfficePackage.open(context, uri)) {
@@ -28,7 +29,50 @@ final class PptxTextChecks {
             });
         }
         return "PASS PPTX typography URI/JNI, narrow number/title boxes, consistent multiline leading and DOCX isolation\n"
-            + "SCREENSHOTS pptx-typography-page{1,2}-{960,1920}.png\n";
+            + "PASS sample page 10 chapter labels retain fractional font sizes, one line and no pixel overlap\n"
+            + "SCREENSHOTS pptx-typography-page{1,2}-{960,1920}.png, pptx-typography-page10-1920.png\n";
+    }
+
+    private static void sampleTitle(OfficeInstrumentation instrumentation) throws Exception {
+        Context context = instrumentation.getTargetContext();
+        Uri uri = Uri.parse("content://" + context.getPackageName() + ".fixtures/samples/sample.pptx");
+        try (OfficePackage source = OfficePackage.open(context, uri)) {
+            OfficeDocument document = source.document;
+            instrumentation.runOnMainChecked(() -> {
+                capture(context, document, 9, 1920);
+                OfficeRenderer renderer = new OfficeRenderer(); renderer.layout(document);
+                java.util.List<OfficeRenderer.Element> labels = new java.util.ArrayList<>();
+                for (OfficeRenderer.Element element : renderer.pages.get(9).elements) {
+                    if (element.texts.isEmpty()) continue;
+                    String text = element.texts.get(0).layout.getText().toString();
+                    if ("PART 01".equals(text) || "章节标题，完整显示".equals(text)) labels.add(element);
+                }
+                PptxRenderingChecks.check(labels.size() == 2, "Sample page 10 contains both chapter labels");
+                StringBuilder failures = new StringBuilder();
+                for (OfficeRenderer.Element label : labels) {
+                    android.text.StaticLayout layout = label.texts.get(0).layout;
+                    android.text.TextPaint measured = new android.text.TextPaint(layout.getPaint());
+                    android.text.TextPaint drawn = new android.text.TextPaint(layout.getPaint());
+                    measured.setTextSize(1); drawn.setTextSize(1);
+                    android.text.Spanned text = (android.text.Spanned) layout.getText();
+                    for (android.text.style.MetricAffectingSpan span : text.getSpans(0, 1, android.text.style.MetricAffectingSpan.class)) {
+                        span.updateMeasureState(measured); span.updateDrawState(drawn);
+                    }
+                    float size = label.source.paragraphs.get(0).runs.get(0).size;
+                    verify(Math.abs(measured.getTextSize() - size) < 0.001f && Math.abs(drawn.getTextSize() - size) < 0.001f,
+                        failures, "Sample chapter label retains fractional measure/draw size: " + size);
+                    String detail = layout.getText() + ": font=" + label.source.paragraphs.get(0).runs.get(0).size
+                        + ", box=" + label.width + "x" + label.height + ", layout=" + layout.getWidth() + "x" + layout.getHeight()
+                        + ", desired=" + android.text.Layout.getDesiredWidth(layout.getText(), layout.getPaint())
+                        + ", lines=" + layout.getLineCount();
+                    verify(layout.getLineCount() == 1, failures, "Sample chapter label must stay on one line: " + detail);
+                }
+                Rect heading = pixels(labels.get(0).source), title = pixels(labels.get(1).source);
+                verify(!heading.isEmpty() && !title.isEmpty() && heading.bottom <= title.top, failures,
+                    "Sample chapter heading and title must not overlap: " + heading + " / " + title);
+                if (failures.length() > 0) throw new AssertionError(failures.toString());
+            });
+        }
     }
 
     private static void multilineSpacing() {
