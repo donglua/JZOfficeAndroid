@@ -1,5 +1,9 @@
 # 更新日志
 
+## 未发布
+
+- 将 `viewer` 和 `viewer-online` 的 Maven groupId 改为 `io.github.donglua.office`，artifactId 和 Java 包名不变。已发布的 `0.2.0` 保留原坐标；升级下一版本时需同时更新 groupId 和版本号。
+
 ## 0.2.0
 
 发布页面：[v0.2.0 Release](https://github.com/donglua/JZOfficeAndroid/releases/tag/v0.2.0)。

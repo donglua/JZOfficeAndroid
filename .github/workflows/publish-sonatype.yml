@@ -95,7 +95,6 @@ jobs:
       - name: Build and publish both signed libraries to Maven Central
         env:
           PUBLISHED_VERSION: ${{ steps.version.outputs.version }}
-          PUBLISHED_GROUP_ID: ${{ vars.PUBLISHED_GROUP_ID }}
           PUBLISHED_ARTIFACT_ID: ${{ vars.PUBLISHED_ARTIFACT_ID }}
           PUBLISHED_NAME: ${{ vars.PUBLISHED_NAME }}
           PUBLISHED_DESCRIPTION: ${{ vars.PUBLISHED_DESCRIPTION }}

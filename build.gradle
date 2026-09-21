@@ -8,7 +8,7 @@ def configuredValue = { String propertyName, String environmentName, String fall
 }
 
 ext {
-    publishedGroupId = configuredValue('publishedGroupId', 'PUBLISHED_GROUP_ID', 'io.github.donglua')
+    publishedGroupId = configuredValue('publishedGroupId', 'PUBLISHED_GROUP_ID', 'io.github.donglua.office')
     publishedArtifactId = configuredValue('publishedArtifactId', 'PUBLISHED_ARTIFACT_ID', 'viewer')
     publishedVersion = configuredValue('publishedVersion', 'PUBLISHED_VERSION', '0.2.0')
     publishedName = configuredValue('publishedName', 'PUBLISHED_NAME', 'JZ Office Android')

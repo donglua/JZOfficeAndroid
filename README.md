@@ -4,7 +4,7 @@
 
 这是基础预览实现，不保证与 Microsoft Office 的版式一致。旧版 `.doc/.ppt/.xls`、加密文档、ZIP64/分卷容器和编辑功能不在支持范围内。
 
-当前源码版本为 **0.2.0**，变更见 [CHANGELOG](CHANGELOG.md)。发布产物见 [v0.2.0 Release](https://github.com/donglua/JZOfficeAndroid/releases/tag/v0.2.0)，Maven Central 坐标为 [viewer](https://central.sonatype.com/artifact/io.github.donglua/viewer/0.2.0) 和 [viewer-online](https://central.sonatype.com/artifact/io.github.donglua/viewer-online/0.2.0)。发布可用性以对应仓库为准；完整设备验收尚未完成。
+当前已发布版本为 **0.2.0**，变更见 [CHANGELOG](CHANGELOG.md)。发布产物见 [v0.2.0 Release](https://github.com/donglua/JZOfficeAndroid/releases/tag/v0.2.0)，Maven Central 坐标为 [viewer](https://central.sonatype.com/artifact/io.github.donglua/viewer/0.2.0) 和 [viewer-online](https://central.sonatype.com/artifact/io.github.donglua/viewer-online/0.2.0)。发布可用性以对应仓库为准；完整设备验收尚未完成。
 
 ## 预览
 
@@ -76,6 +76,8 @@ dependencies {
     implementation("io.github.donglua:viewer-online:0.2.0")
 }
 ```
+
+下一版本起，两个模块的 Maven groupId 将改为 `io.github.donglua.office`，artifactId 和 Java 包名不变。升级时需同时更新 groupId 和版本号；已发布的 `0.2.0` 仍使用上面的旧坐标。
 
 `viewer` AAR 默认包含 `arm64-v8a` 和 `armeabi-v7a` 原生库、R8 保留规则。接入项目不需要安装 Rust 或 NDK，`viewer-online` 不额外引入网络库，Demo 样例不进入两个 AAR。
 
@@ -296,11 +298,11 @@ let document = jz_office_core::parse_path(std::path::Path::new("sample.docx"))?;
 
 ## 发布到 Sonatype Central
 
-0.2.0 的坐标为 `io.github.donglua:viewer:0.2.0` 和 `io.github.donglua:viewer-online:0.2.0`。两个模块使用共享 Gradle 发布配置，分别生成 release AAR、sources JAR、Javadoc JAR、POM 和 Gradle Module Metadata，上传时附带 GPG 签名。`viewer-online` 的发布依赖指向同版本 `viewer`。
+下一版本的坐标为 `io.github.donglua.office:viewer:<version>` 和 `io.github.donglua.office:viewer-online:<version>`。两个模块使用共享 Gradle 发布配置，分别生成 release AAR、sources JAR、Javadoc JAR、POM 和 Gradle Module Metadata，上传时附带 GPG 签名。`viewer-online` 的发布依赖指向同组、同版本的 `viewer`。
 
 ### 本地准备
 
-根项目默认版本、Demo 的 `versionName` 和 Rust workspace 版本统一为 `0.2.0`。发布前在本地生成并检查两个模块的发布内容：
+当前默认版本仍为 `0.2.0`，下一版本号尚未指定；正式发布前需同步更新根项目默认版本、Demo 的 `versionName` 和 Rust workspace 版本。以下命令仅在本地生成并检查新 groupId 下两个模块的发布内容：
 
 ```sh
 ./gradlew :prepareRelease
@@ -309,22 +311,22 @@ let document = jz_office_core::parse_path(std::path::Path::new("sample.docx"))?;
 根任务 `:prepareRelease` 将两个模块的发布文件写入 `build/release-repository/`，检查 POM 和 Gradle 元数据坐标、模块间依赖以及 AAR 内容，不上传 Sonatype。未配置签名密钥时，本地准备会跳过签名；正式发布要求完整的 POM 信息和签名配置。默认坐标对应目录为：
 
 ```text
-build/release-repository/io/github/donglua/viewer/0.2.0/
-build/release-repository/io/github/donglua/viewer-online/0.2.0/
+build/release-repository/io/github/donglua/office/viewer/0.2.0/
+build/release-repository/io/github/donglua/office/viewer-online/0.2.0/
 ```
 
 本地准备通过不代表 Maven Central 已发布，也不替代设备验收。当前检查状态见「验证」。
 
 ### 发布凭据
 
-实际发布必须使用尚未发布的版本号，并确保坐标位于 Central Portal 已验证的 namespace 下。以下配置供发布时使用。
+实际发布必须使用下一版本号，并确保坐标位于 Central Portal 已验证的 namespace 下。`io.github.donglua.office` 属于已验证的父 namespace `io.github.donglua`，`sonatypeNamespace` 保持不变；授权规则见 [Sonatype 文档](https://central.sonatype.org/faq/namespaces-vs-groupids/)。以下配置中的 `<next-version>` 需替换为实际版本号。
 
 Central Portal 的 Portal Token 和签名信息只放在用户级 Gradle 属性或环境变量中，不要提交到仓库。例如：
 
 ```properties
-publishedGroupId=io.github.donglua
+publishedGroupId=io.github.donglua.office
 publishedArtifactId=viewer
-publishedVersion=0.2.0
+publishedVersion=<next-version>
 publishedLicenseName=Apache License, Version 2.0
 publishedLicenseUrl=https://www.apache.org/licenses/LICENSE-2.0.txt
 publishedDeveloperName=Your Name
@@ -357,7 +359,6 @@ signing.password=<gpg-passphrase>
 | Variable | 内容 |
 | --- | --- |
 | `SONATYPE_NAMESPACE` | `io.github.donglua`，须已在 Central Portal 验证 |
-| `PUBLISHED_GROUP_ID` | `io.github.donglua` |
 | `PUBLISHED_ARTIFACT_ID` | `viewer` 的 artifactId，默认 `viewer`；在线模块自动使用 `<viewer artifactId>-online` |
 | `PUBLISHED_NAME` | POM 中的项目名 |
 | `PUBLISHED_DESCRIPTION` | POM 中的项目描述 |
@@ -368,7 +369,7 @@ signing.password=<gpg-passphrase>
 | `PUBLISHED_DEVELOPER_NAME` | 开发者姓名或组织名 |
 | `PUBLISHED_DEVELOPER_EMAIL` | 开发者公开邮箱 |
 
-`SONATYPE_NAMESPACE` 和 `PUBLISHED_GROUP_ID` 未配置时均使用默认值 `io.github.donglua`。如果 GitHub Actions Variables 中已配置旧值，需要同步更新。
+`SONATYPE_NAMESPACE` 未配置时使用默认值 `io.github.donglua`。发布工作流不再读取 Actions Variable `PUBLISHED_GROUP_ID`，而是使用所检出标签的 `build.gradle` 中的默认 groupId；旧标签仍保留原坐标。本地发布若曾配置 `publishedGroupId` 属性或 `PUBLISHED_GROUP_ID` 环境变量，需移除覆盖或更新为 `io.github.donglua.office`。
 
 正式发布时，基于待发布提交创建 tag，再发布 GitHub 正式 Release。0.2.0 对应标签为 `v0.2.0`；工作流去掉 `v` 前缀，将该 tag 对应的两个模块以同一版本发布。版本号必须为三段数字，不接受 `-rc`、`-beta`、`-SNAPSHOT` 等后缀。
 
