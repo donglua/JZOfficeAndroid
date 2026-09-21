@@ -1,0 +1,78 @@
+apply plugin: 'maven-publish'
+apply plugin: 'signing'
+
+android {
+    publishing {
+        singleVariant('release') {
+            withSourcesJar()
+            withJavadocJar()
+        }
+    }
+}
+
+afterEvaluate {
+    def online = project.name == 'viewer-online'
+    publishing {
+        publications {
+            release(MavenPublication) {
+                groupId = rootProject.publishedGroupId
+                artifactId = rootProject.publishedArtifactId + (online ? '-online' : '')
+                version = rootProject.publishedVersion
+                from components.release
+                pom {
+                    name = rootProject.publishedName + (online ? ' Online' : '')
+                    description = online ? 'HTTP document downloads and cache cleanup for JZ Office Android.' : rootProject.publishedDescription
+                    url = rootProject.publishedUrl
+                    licenses {
+                        license {
+                            name = rootProject.publishedLicenseName
+                            url = rootProject.publishedLicenseUrl
+                        }
+                    }
+                    developers {
+                        developer {
+                            id = rootProject.publishedDeveloperId
+                            name = rootProject.publishedDeveloperName
+                            email = rootProject.publishedDeveloperEmail
+                        }
+                    }
+                    scm {
+                        connection = 'scm:git:git://github.com/donglua/JZOfficeAndroid.git'
+                        developerConnection = 'scm:git:ssh://git@github.com/donglua/JZOfficeAndroid.git'
+                        url = rootProject.publishedUrl
+                    }
+                }
+            }
+        }
+        repositories {
+            maven {
+                name = 'ReleaseCheck'
+                url = rootProject.layout.buildDirectory.dir('release-repository')
+            }
+            maven {
+                name = 'Sonatype'
+                url = uri('https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/')
+                credentials {
+                    username = rootProject.sonatypeUsername
+                    password = rootProject.sonatypePassword
+                }
+            }
+        }
+    }
+
+    def hasInMemorySigningKey = rootProject.signingKey && rootProject.signingPassword
+    def hasFileSigning = rootProject.findProperty('signing.secretKeyRingFile') && rootProject.findProperty('signing.password')
+    signing {
+        required {
+            gradle.taskGraph.allTasks.any { it.name == 'publishReleasePublicationToSonatypeRepository' }
+        }
+        if (hasInMemorySigningKey) useInMemoryPgpKeys(rootProject.signingKey, rootProject.signingPassword)
+        sign publishing.publications.release
+    }
+    tasks.withType(Sign).configureEach {
+        onlyIf { hasInMemorySigningKey || hasFileSigning || signing.required }
+    }
+    tasks.named('publishReleasePublicationToSonatypeRepository').configure {
+        dependsOn rootProject.tasks.named('validateSonatypePublication'), rootProject.tasks.named('prepareRelease')
+    }
+}

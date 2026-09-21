@@ -1,7 +1,5 @@
 plugins {
     id 'com.android.library'
-    id 'maven-publish'
-    id 'signing'
 }
 
 abstract class GenerateOfficeFixtures extends Exec {
@@ -25,12 +23,6 @@ android {
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_11
         targetCompatibility JavaVersion.VERSION_11
-    }
-    publishing {
-        singleVariant('release') {
-            withSourcesJar()
-            withJavadocJar()
-        }
     }
 }
 
@@ -63,124 +55,10 @@ tasks.register('buildNative', Exec) {
 }
 tasks.named('preBuild').configure { dependsOn tasks.named('buildNative') }
 
-afterEvaluate {
-    publishing {
-        publications {
-            release(MavenPublication) {
-                groupId = rootProject.publishedGroupId
-                artifactId = rootProject.publishedArtifactId
-                version = rootProject.publishedVersion
-                from components.release
-                pom {
-                    name = rootProject.publishedName
-                    description = rootProject.publishedDescription
-                    url = rootProject.publishedUrl
-                    licenses {
-                        license {
-                            name = rootProject.publishedLicenseName
-                            url = rootProject.publishedLicenseUrl
-                        }
-                    }
-                    developers {
-                        developer {
-                            id = rootProject.publishedDeveloperId
-                            name = rootProject.publishedDeveloperName
-                            email = rootProject.publishedDeveloperEmail
-                        }
-                    }
-                    scm {
-                        connection = 'scm:git:git://github.com/donglua/JZOfficeAndroid.git'
-                        developerConnection = 'scm:git:ssh://git@github.com/donglua/JZOfficeAndroid.git'
-                        url = rootProject.publishedUrl
-                    }
-                }
-            }
-        }
-        repositories {
-            maven {
-                name = 'Sonatype'
-                url = uri('https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/')
-                credentials {
-                    username = rootProject.sonatypeUsername
-                    password = rootProject.sonatypePassword
-                }
-            }
-        }
-    }
+apply from: rootProject.file('gradle/publish-library.gradle')
 
-    def signingSecretKeyRingFile = rootProject.findProperty('signing.secretKeyRingFile')
-    def hasInMemorySigningKey = rootProject.signingKey && rootProject.signingPassword
-    signing {
-        required {
-            gradle.taskGraph.allTasks.any { task ->
-                task.name == 'publishToSonatype' || task.name == 'publishReleasePublicationToSonatypeRepository'
-            }
-        }
-        if (hasInMemorySigningKey) {
-            useInMemoryPgpKeys(rootProject.signingKey, rootProject.signingPassword)
-        }
-        if (hasInMemorySigningKey || signingSecretKeyRingFile) {
-            sign publishing.publications.release
-        }
-    }
-
-    def sonatypePublishingType = providers.gradleProperty('sonatypePublishingType').getOrElse('user_managed')
-    tasks.register('validateSonatypePublication') {
-        doLast {
-            if (!(sonatypePublishingType in ['user_managed', 'automatic'])) {
-                throw new GradleException('sonatypePublishingType must be user_managed or automatic')
-            }
-            def requiredValues = [
-                publishedGroupId: rootProject.publishedGroupId,
-                publishedArtifactId: rootProject.publishedArtifactId,
-                publishedVersion: rootProject.publishedVersion,
-                publishedLicenseName: rootProject.publishedLicenseName,
-                publishedLicenseUrl: rootProject.publishedLicenseUrl,
-                publishedDeveloperName: rootProject.publishedDeveloperName,
-                publishedDeveloperEmail: rootProject.publishedDeveloperEmail,
-                sonatypeNamespace: rootProject.sonatypeNamespace,
-                sonatypeUsername: rootProject.sonatypeUsername,
-                sonatypePassword: rootProject.sonatypePassword,
-            ]
-            def missing = requiredValues.findAll { key, value -> !value }.keySet().toList()
-            def hasFileSigning = rootProject.findProperty('signing.secretKeyRingFile') && rootProject.findProperty('signing.password')
-            if (!hasInMemorySigningKey && !hasFileSigning) {
-                missing << 'GPG signing (signingKey/signingPassword or signing.secretKeyRingFile/signing.password)'
-            }
-            if (missing) {
-                throw new GradleException("Sonatype publication is missing: ${missing.join(', ')}")
-            }
-        }
-    }
-
-    tasks.named('publishReleasePublicationToSonatypeRepository').configure {
-        dependsOn tasks.named('validateSonatypePublication')
-    }
-
-    tasks.register('publishToSonatype') {
-        group = 'publishing'
-        description = 'Publishes the signed release publication to Sonatype Central Portal staging.'
-        dependsOn tasks.named('publishReleasePublicationToSonatypeRepository')
-        doLast {
-            def token = "${rootProject.sonatypeUsername}:${rootProject.sonatypePassword}".bytes.encodeBase64().toString()
-            def endpoint = "https://ossrh-staging-api.central.sonatype.com/manual/upload/defaultRepository/${rootProject.sonatypeNamespace}?publishing_type=${sonatypePublishingType}"
-            def connection = new URL(endpoint).openConnection()
-            connection.requestMethod = 'POST'
-            connection.doOutput = true
-            connection.setRequestProperty('Authorization', "Bearer ${token}")
-            connection.setRequestProperty('Accept', 'application/json')
-            connection.connect()
-            def responseCode = connection.responseCode
-            def responseStream = responseCode < 400 ? connection.inputStream : connection.errorStream
-            def responseBody = responseStream ? responseStream.getText('UTF-8') : ''
-            if (responseCode >= 300) {
-                throw new GradleException("Sonatype Portal handoff failed with HTTP ${responseCode}: ${responseBody}")
-            }
-            if (sonatypePublishingType == 'automatic') {
-                logger.lifecycle("Sonatype deployment submitted for namespace ${rootProject.sonatypeNamespace}; it will publish automatically after validation. Check status at https://central.sonatype.com/publishing")
-            } else {
-                logger.lifecycle("Sonatype deployment submitted for namespace ${rootProject.sonatypeNamespace}; review and publish it at https://central.sonatype.com/publishing")
-            }
-        }
-    }
+tasks.register('publishToSonatype') {
+    group = 'publishing'
+    description = 'Publishes both libraries through the root release task.'
+    dependsOn rootProject.tasks.named('publishToSonatype')
 }

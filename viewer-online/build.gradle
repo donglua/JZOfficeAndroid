@@ -19,3 +19,5 @@ android {
 }
 
 dependencies { api project(':viewer') }
+
+apply from: rootProject.file('gradle/publish-library.gradle')

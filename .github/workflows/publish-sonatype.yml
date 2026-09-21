@@ -1,4 +1,4 @@
-name: Publish viewer to Sonatype Central
+name: Publish libraries to Sonatype Central
 
 on:
   release:
@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Existing v-prefixed release tag version to publish (e.g. 0.1.0)
+        description: Existing v-prefixed release tag version to publish (e.g. 0.2.0)
         required: true
-        default: 0.1.0
+        default: 0.2.0
         type: string
 
 permissions:
@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   publish:
-    name: Publish release AAR
+    name: Publish both release AARs
     permissions:
       contents: write
     if: >-
@@ -59,9 +59,6 @@ jobs:
           java-version: '21'
           cache: gradle
 
-      - name: Set Gradle JVM for documentation generation
-        run: printf 'toolchainVersion=21\n' > gradle/gradle-daemon-jvm.properties
-
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
@@ -81,7 +78,21 @@ jobs:
           cargo test --workspace --locked
           cargo clippy --workspace --all-targets --locked -- -D warnings
 
-      - name: Publish signed release to Maven Central
+      - name: Run online and cache checks
+        shell: bash
+        run: |
+          classes="$RUNNER_TEMP/office-checks"
+          mkdir -p "$classes"
+          javac --release 11 -Xlint:all -Werror -d "$classes" \
+            viewer/src/main/java/cn/jingzhuan/lib/office/OfficeCache.java \
+            viewer-online/src/main/java/cn/jingzhuan/lib/office/online/RemoteOfficeRequest.java \
+            viewer-online/src/main/java/cn/jingzhuan/lib/office/online/RemoteOfficeDownloader.java \
+            viewer-online/src/main/java/cn/jingzhuan/lib/office/online/HttpUrlConnectionOfficeDownloader.java \
+            scripts/tests/OfficeCacheChecks.java scripts/tests/RemoteDownloaderChecks.java
+          java -cp "$classes" cn.jingzhuan.lib.office.OfficeCacheChecks
+          java -cp "$classes" RemoteDownloaderChecks
+
+      - name: Build and publish both signed libraries to Maven Central
         env:
           PUBLISHED_VERSION: ${{ steps.version.outputs.version }}
           PUBLISHED_GROUP_ID: ${{ vars.PUBLISHED_GROUP_ID }}
@@ -99,16 +110,20 @@ jobs:
           SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
           SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
-        run: >-
-          ./gradlew --no-daemon --stacktrace :viewer:publishToSonatype -PsonatypePublishingType=automatic
+        run: |
+          ./gradlew --no-daemon --stacktrace :prepareRelease :viewer-online:lintRelease :demo:assembleRelease
+          ./gradlew --no-daemon --stacktrace :publishToSonatype -PsonatypePublishingType=automatic
 
-      - name: Attach AAR to GitHub Release
+      - name: Attach both AARs to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.event.release.tag_name || format('v{0}', steps.version.outputs.version) }}
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
         run: |
-          asset="$RUNNER_TEMP/viewer-$RELEASE_VERSION.aar"
-          cp viewer/build/outputs/aar/viewer-release.aar "$asset"
-          gh release upload "$RELEASE_TAG" "$asset"
+          for module in viewer viewer-online; do
+            cp "$module/build/outputs/aar/$module-release.aar" "$RUNNER_TEMP/$module-$RELEASE_VERSION.aar"
+          done
+          gh release upload "$RELEASE_TAG" \
+            "$RUNNER_TEMP/viewer-$RELEASE_VERSION.aar" \
+            "$RUNNER_TEMP/viewer-online-$RELEASE_VERSION.aar"

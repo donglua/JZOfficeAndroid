@@ -1,0 +1,95 @@
+import groovy.xml.XmlSlurper
+import groovy.json.JsonSlurper
+import java.util.zip.ZipFile
+
+def releaseModules = ['viewer', 'viewer-online']
+def sonatypePublishingType = providers.gradleProperty('sonatypePublishingType').getOrElse('user_managed')
+
+tasks.register('prepareRelease') {
+    group = 'publishing'
+    description = 'Builds both publications in a local repository and verifies artifacts and dependency coordinates.'
+    dependsOn releaseModules.collect { ":${it}:publishReleasePublicationToReleaseCheckRepository" }
+    doLast {
+        def artifacts = [publishedArtifactId, "${publishedArtifactId}-online"]
+        def repository = layout.buildDirectory.dir('release-repository').get().asFile
+        artifacts.eachWithIndex { artifact, index ->
+            def directory = new File(repository, "${publishedGroupId.replace('.', '/')}/${artifact}/${publishedVersion}")
+            def base = "${artifact}-${publishedVersion}"
+            ['.aar', '-sources.jar', '-javadoc.jar', '.pom', '.module'].each { suffix ->
+                def output = new File(directory, base + suffix)
+                if (!output.isFile() || output.length() == 0) throw new GradleException("Missing publication artifact: ${output}")
+            }
+            def pom = new XmlSlurper().parse(new File(directory, base + '.pom'))
+            if (pom.groupId.text() != publishedGroupId || pom.artifactId.text() != artifact || pom.version.text() != publishedVersion
+                    || pom.packaging.text() != 'aar') throw new GradleException("Incorrect coordinates in ${base}.pom")
+            def dependencies = pom.dependencies.dependency
+            if (index == 0 && dependencies.size() != 0) throw new GradleException('viewer must remain independent of viewer-online')
+            if (index == 1 && (dependencies.size() != 1 || dependencies[0].groupId.text() != publishedGroupId
+                    || dependencies[0].artifactId.text() != publishedArtifactId || dependencies[0].version.text() != publishedVersion
+                    || dependencies[0].scope.text() != 'compile')) throw new GradleException('viewer-online POM must depend on the matching viewer release')
+            def metadata = new JsonSlurper().parse(new File(directory, base + '.module'))
+            if (metadata.component.group != publishedGroupId || metadata.component.module != artifact
+                    || metadata.component.version != publishedVersion) throw new GradleException("Incorrect coordinates in ${base}.module")
+            if (index == 1) {
+                def api = metadata.variants.find { it.attributes['org.gradle.usage'] == 'java-api' }
+                if (api?.dependencies?.size() != 1 || api.dependencies[0].group != publishedGroupId
+                        || api.dependencies[0].module != publishedArtifactId || api.dependencies[0].version.requires != publishedVersion) {
+                    throw new GradleException('viewer-online module metadata must expose the matching viewer dependency')
+                }
+            }
+            new ZipFile(new File(directory, base + '.aar')).withCloseable { aar ->
+                if (aar.getEntry('classes.jar') == null) throw new GradleException("Missing classes in ${base}.aar")
+                def manifest = aar.getInputStream(aar.getEntry('AndroidManifest.xml')).withCloseable { it.getText('UTF-8') }
+                if (manifest.contains('android.permission.INTERNET') != (index == 1)) throw new GradleException("Incorrect network permission in ${base}.aar")
+            }
+            ['-sources.jar', '-javadoc.jar'].each { suffix ->
+                new ZipFile(new File(directory, base + suffix)).withCloseable { archive ->
+                    if (archive.size() == 0) throw new GradleException("Empty ${base}${suffix}")
+                }
+            }
+            logger.lifecycle("Verified ${publishedGroupId}:${artifact}:${publishedVersion}")
+        }
+    }
+}
+
+tasks.register('validateSonatypePublication') {
+    doLast {
+        if (!(sonatypePublishingType in ['user_managed', 'automatic'])) throw new GradleException('sonatypePublishingType must be user_managed or automatic')
+        if (!(publishedVersion ==~ /(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)/)) throw new GradleException('A stable three-part publishedVersion is required')
+        def requiredValues = [
+            publishedGroupId: publishedGroupId, publishedArtifactId: publishedArtifactId, publishedVersion: publishedVersion,
+            publishedName: publishedName, publishedDescription: publishedDescription, publishedUrl: publishedUrl,
+            publishedLicenseName: publishedLicenseName, publishedLicenseUrl: publishedLicenseUrl,
+            publishedDeveloperName: publishedDeveloperName, publishedDeveloperEmail: publishedDeveloperEmail,
+            sonatypeNamespace: sonatypeNamespace, sonatypeUsername: sonatypeUsername, sonatypePassword: sonatypePassword,
+        ]
+        def missing = requiredValues.findAll { key, value -> !value }.keySet().toList()
+        def hasFileSigning = findProperty('signing.secretKeyRingFile') && findProperty('signing.password')
+        if (!(signingKey && signingPassword) && !hasFileSigning) missing << 'GPG signing configuration'
+        if (missing) throw new GradleException("Sonatype publication is missing: ${missing.join(', ')}")
+    }
+}
+
+tasks.register('publishToSonatype') {
+    group = 'publishing'
+    description = 'Uploads both signed libraries, then submits their shared Sonatype deployment once.'
+    dependsOn releaseModules.collect { ":${it}:publishReleasePublicationToSonatypeRepository" }
+    doLast {
+        def token = "${sonatypeUsername}:${sonatypePassword}".bytes.encodeBase64().toString()
+        def endpoint = "https://ossrh-staging-api.central.sonatype.com/manual/upload/defaultRepository/${sonatypeNamespace}?publishing_type=${sonatypePublishingType}"
+        def connection = new URL(endpoint).openConnection()
+        try {
+            connection.requestMethod = 'POST'
+            connection.doOutput = true
+            connection.connectTimeout = 30000
+            connection.readTimeout = 60000
+            connection.setRequestProperty('Authorization', "Bearer ${token}")
+            connection.setRequestProperty('Accept', 'application/json')
+            def responseCode = connection.responseCode
+            def responseStream = responseCode < 400 ? connection.inputStream : connection.errorStream
+            if (responseStream != null) responseStream.close()
+            if (responseCode >= 300) throw new GradleException("Sonatype Portal handoff failed with HTTP ${responseCode}")
+            logger.lifecycle("Both libraries submitted (${sonatypePublishingType}). Check status at https://central.sonatype.com/publishing")
+        } finally { connection.disconnect() }
+    }
+}
