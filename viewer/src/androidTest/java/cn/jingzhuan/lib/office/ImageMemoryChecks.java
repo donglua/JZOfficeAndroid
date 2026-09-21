@@ -338,7 +338,9 @@ final class ImageMemoryChecks {
     }
 
     private Set<String> packageFiles() throws IOException {
-        String[] names = cacheDir.list((dir, name) -> name.startsWith("jz-office-"));
+        File directory = new File(cacheDir, "office-preview");
+        if (!directory.exists()) return new HashSet<>();
+        String[] names = directory.list();
         if (names == null) throw new IOException("Cannot list test cache directory");
         return new HashSet<>(Arrays.asList(names));
     }

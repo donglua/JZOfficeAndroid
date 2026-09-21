@@ -147,7 +147,7 @@ public final class OfficeInstrumentation extends Instrumentation {
             rapidReplacement();
             runOnMainSync(() -> activity.preview.clear());
             awaitCacheCleanup();
-            File[] cache = getTargetContext().getCacheDir().listFiles((dir, name) -> name.startsWith("jz-office-"));
+            File[] cache = new File(getTargetContext().getCacheDir(), "office-preview").listFiles();
             check(cache != null && cache.length == 0, "Temporary document files removed");
             runOnMainSync(() -> activity.finish());
             output.putString("stream", "\n" + results + "ALL CHECKS PASSED\n");
@@ -291,7 +291,7 @@ public final class OfficeInstrumentation extends Instrumentation {
     private void awaitCacheCleanup() throws Exception {
         long deadline = SystemClock.uptimeMillis() + 10000;
         while (SystemClock.uptimeMillis() < deadline) {
-            File[] files = getTargetContext().getCacheDir().listFiles((dir, name) -> name.startsWith("jz-office-"));
+            File[] files = new File(getTargetContext().getCacheDir(), "office-preview").listFiles();
             if (files != null && files.length == 0) return;
             SystemClock.sleep(20);
         }

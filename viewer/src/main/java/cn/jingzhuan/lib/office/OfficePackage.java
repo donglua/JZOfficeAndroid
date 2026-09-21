@@ -28,18 +28,20 @@ final class OfficePackage implements Closeable {
     }
     final File file;
     final ZipFile zip;
+    private final OfficeCache.Entry cache;
     private long readBytes;
     private final Map<String, Long> readSizes = new HashMap<>();
 
-    private OfficePackage(File file, ZipFile zip) { this.file = file; this.zip = zip; }
+    private OfficePackage(OfficeCache.Entry cache, ZipFile zip) { this.cache = cache; this.file = cache.getFile(); this.zip = zip; }
 
     static OfficePackage open(Context context, Uri uri) throws IOException {
         String scheme = uri.getScheme();
         if (!"content".equals(scheme) && !"file".equals(scheme)) throw new IOException("Only content:// and file:// URIs are supported");
-        File file = File.createTempFile("jz-office-", ".zip", context.getCacheDir());
+        OfficeCache.Entry cache = OfficeCache.create(context.getCacheDir());
+        File file = cache.getFile();
         ZipFile zip = null;
         try {
-            try (InputStream input = context.getContentResolver().openInputStream(uri);
+            try (InputStream input = "file".equals(scheme) ? OfficeCache.openInput(new File(uri.getPath())) : context.getContentResolver().openInputStream(uri);
                  FileOutputStream output = new FileOutputStream(file)) {
                 if (input == null) throw new IOException("Provider returned no stream");
                 byte[] buffer = new byte[32768];
@@ -63,10 +65,10 @@ final class OfficePackage implements Closeable {
                 long size = entry.getSize();
                 if (size < 0 || size > MAX_EXPANDED || (expanded += size) > MAX_EXPANDED) throw new IOException("Expanded document exceeds 256 MiB limit");
             }
-            return new OfficePackage(file, zip);
+            return new OfficePackage(cache, zip);
         } catch (IOException | RuntimeException e) {
             if (zip != null) try { zip.close(); } catch (IOException ignored) { }
-            file.delete();
+            cache.close();
             throw e;
         }
     }
@@ -142,6 +144,6 @@ final class OfficePackage implements Closeable {
     }
 
     @Override public void close() throws IOException {
-        try { zip.close(); } finally { file.delete(); }
+        try { zip.close(); } finally { cache.close(); }
     }
 }

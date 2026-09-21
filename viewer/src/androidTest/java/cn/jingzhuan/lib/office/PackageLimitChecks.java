@@ -18,7 +18,7 @@ final class PackageLimitChecks {
         verify(context, "pptx", 192, 1, null, log);
         verify(context, "pptx", 129, 0, "128 MiB input limit", log);
         verify(context, "pptx", 257, 1, "256 MiB limit", log);
-        File[] cached = context.getCacheDir().listFiles((dir, name) -> name.startsWith("jz-office-"));
+        File[] cached = new File(context.getCacheDir(), "office-preview").listFiles();
         if (cached == null || cached.length != 0) throw new AssertionError("Package limit checks leaked temporary files");
         return log.append("PASS Package limit temporary files removed\n").toString();
     }

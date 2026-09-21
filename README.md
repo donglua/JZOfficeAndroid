@@ -12,6 +12,7 @@
 | --- | --- |
 | `core/` | `jz-office-core`：ZIP/OOXML、关系解析、基础样式、平台无关文档模型 |
 | `viewer/` | Android AAR：URI 读取、图片解码、文字排版、Canvas 绘制、滚动与缩放 |
+| `viewer-online/` | 可选 Android AAR：在线文件下载、进度、取消和缓存清理，再交给 `viewer` 预览 |
 | `viewer/native/` | `jz-office-android`：JNI 桥接，生成 `libjz_office.so` |
 | `demo/` | 内置样例、系统文件选择器和 `ACTION_VIEW` 接入示例 |
 | `demo/src/main/assets/samples/` | 每种格式一个综合样例，展示现有样例覆盖的场景 |
@@ -58,6 +59,8 @@ dependencies {
 ```kotlin
 dependencies {
     implementation(project(":viewer"))
+    // 可选：在线链接预览，已传递依赖 viewer。
+    implementation(project(":viewer-online"))
 }
 ```
 
@@ -137,6 +140,90 @@ PPTX 文本框支持继承和覆盖 `wrap`：`none` 按带样式的文字宽度�
 - 不声明广泛存储权限，也不请求联网权限。外部图片和远程关系不会下载。
 
 完整选择器与授权处理见 `demo` 的 `MainActivity`。[Android 文件访问文档](https://developer.android.com/training/data-storage/shared/documents-files)说明了 URI 读取和持久化授权。
+
+## 在线链接预览
+
+`viewer-online` 是可选源码模块，负责把文件直链或签名 URL 下载到应用私有缓存，再调用 `OfficePreviewView.open(Uri)`。需要完整下载后才能预览，不支持边下载边看、断点续传和持久离线缓存。`viewer` 主模块仍保持离线能力，不声明网络权限，也不依赖网络库。
+
+网络权限由 `viewer-online` 的 Manifest 合并到宿主。建议使用 HTTPS；HTTP 是否可用由宿主的 [Android 网络安全配置](https://developer.android.com/privacy-and-security/security-config#CleartextTrafficPermitted)决定，模块不会全局放开明文请求。跨源重定向不转发自定义请求头，也不允许 HTTPS 降级到 HTTP。
+
+```kotlin
+val loader = RemoteOfficeLoader(context)
+val request = RemoteOfficeRequest.builder("https://example.com/report.xlsx")
+    .header("Authorization", "Bearer <token>")
+    .displayName("report.xlsx")
+    .build()
+
+val task = loader.open(preview, request, object : RemoteOfficeLoader.Listener {
+    override fun onProgress(bytesRead: Long, totalBytes: Long) {
+        // totalBytes 为 -1 时表示服务器未返回 Content-Length。
+    }
+
+    override fun onDownloaded(result: RemoteOfficeDownloader.Result) {
+        // 下载完成，随后开始解析和预览。
+    }
+
+    override fun onLoaded(info: OfficePreviewView.Info) {
+        // info.format, info.pageCount, info.warnings, info.sheetNames
+    }
+
+    override fun onError(error: Exception) {
+        showError(error.message)
+    }
+})
+```
+
+一个 `RemoteOfficeLoader` 绑定一个 `OfficePreviewView`。`open()`、`Task.cancel()` 和 `close()` 必须在主线程调用；所有 loader 回调也在主线程执行。`onLoaded()` 后仍可能收到图片解码的 `onError()`。切换为直接调用 `preview.open(localUri, ...)` 前，先取消当前在线任务；Activity 销毁或 Fragment 的 `onDestroyView()` 中调用 `loader.close()`。视图离开窗口也会取消在线会话并清空预览。
+
+`Task.cancel()` 立即使旧任务回调失效并清空其预览，后台尝试断开连接；已经阻塞的网络读取可能等到读取超时才退出，随后释放临时文件。同一 loader 的后续下载需等待该下载线程退出。连接与读取超时默认为 15 秒、30 秒，可在 request 中缩短。`isComplete()` 表示初始加载已经成功、失败或取消；加载成功后取消任务仍会关闭当前预览。
+
+默认下载器使用 Android `HttpURLConnection`，不引入 OkHttp。需要统一鉴权、Cookie、证书、代理或日志时，可以实现 `RemoteOfficeDownloader` 并传入构造函数。下载器应遵守大小上限、取消标记和 `onCancel()` 连接释放约定；临时文件由 loader 管理。默认上限为 128 MiB，可调低，不能超过现有解析器上限。
+
+### 清理缓存
+
+```kotlin
+loader.clearCache { result ->
+    val releasedBytes = result.deletedBytes
+    val removedFiles = result.deletedFiles
+    val inUseFiles = result.skippedFiles
+    val failedFiles = result.failedFiles
+}
+
+// 没有 loader 实例时也可以调用；清理完成后在主线程回调。
+RemoteOfficeLoader.clearCache(context) { result ->
+    showClearedSize(result.deletedBytes)
+}
+```
+
+下载临时文件与预览副本统一存放在 `cacheDir/office-preview/`，由 `viewer` 中的 `OfficeCache` 记录使用状态。清理在独立后台线程执行，只删除该目录中本库命名的闲置文件，不遍历应用的其他缓存，也不删除正在下载、解析或显示的文件。结果中的 `failedFiles` 计入删除失败；目录无法读取时计为 1 次失败。
+
+下载失败、取消或预览关闭后，文件在最后一个使用者释放时自动删除。首次创建缓存或初始化 loader 时清理前次进程退出的残留。缓存使用状态在同一应用进程内共享；当前版本不支持多个进程共用该目录。清理操作可以重复执行，也可以在 loader 关闭后调用。
+
+当前 URI 接口会再复制一份预览文件，单个文档交接时可能占用约两倍文件大小的磁盘空间。DOCX/PPTX 的预览副本需保留至关闭，以供延迟加载图片；XLSX 解析完成即可释放。Demo 的 `More` 菜单提供在线打开、取消、重试、关闭文档和清理缓存。
+
+### 在线模块验证
+
+本地 HTTP/HTTPS 和缓存检查使用 JDK 11 及以上运行，无额外测试依赖：
+
+```sh
+mkdir -p /tmp/jz-office-online-checks
+javac --release 11 -d /tmp/jz-office-online-checks \
+    viewer/src/main/java/cn/jingzhuan/lib/office/OfficeCache.java \
+    viewer-online/src/main/java/cn/jingzhuan/lib/office/online/RemoteOfficeRequest.java \
+    viewer-online/src/main/java/cn/jingzhuan/lib/office/online/RemoteOfficeDownloader.java \
+    viewer-online/src/main/java/cn/jingzhuan/lib/office/online/HttpUrlConnectionOfficeDownloader.java \
+    scripts/tests/OfficeCacheChecks.java scripts/tests/RemoteDownloaderChecks.java
+java -cp /tmp/jz-office-online-checks cn.jingzhuan.lib.office.OfficeCacheChecks
+java -cp /tmp/jz-office-online-checks RemoteDownloaderChecks
+```
+
+Android 集成检查覆盖三种格式的下载交接、预览中清理、取消后打开本地文件、回调内取消与关闭后的文件释放，需连接支持已打包 ABI 的设备：
+
+```sh
+./gradlew :viewer-online:assembleDebug :demo:assembleDebug :viewer-online:assembleDebugAndroidTest
+adb install -r viewer-online/build/outputs/apk/androidTest/debug/viewer-online-debug-androidTest.apk
+adb shell am instrument -w cn.jingzhuan.lib.office.online.test/cn.jingzhuan.lib.office.online.OnlineInstrumentation
+```
 
 ## 构建
 

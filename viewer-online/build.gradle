@@ -1,0 +1,21 @@
+plugins { id 'com.android.library' }
+
+group = rootProject.publishedGroupId
+version = rootProject.publishedVersion
+
+android {
+    enableKotlin = false
+    namespace 'cn.jingzhuan.lib.office.online'
+    compileSdk 35
+    defaultConfig {
+        minSdk 23
+        testInstrumentationRunner 'cn.jingzhuan.lib.office.online.OnlineInstrumentation'
+    }
+    sourceSets.androidTest.assets.srcDir(rootProject.file('demo/src/main/assets'))
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+}
+
+dependencies { api project(':viewer') }

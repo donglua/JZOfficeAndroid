@@ -25,4 +25,6 @@ android {
         targetCompatibility JavaVersion.VERSION_11
     }
 }
-dependencies { implementation project(':viewer') }
+dependencies {
+    implementation project(':viewer-online')
+}
