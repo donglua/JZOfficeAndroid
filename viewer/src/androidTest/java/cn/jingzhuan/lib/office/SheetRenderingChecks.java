@@ -26,7 +26,7 @@ final class SheetRenderingChecks {
     static String run(Context context) throws Exception {
         StringBuilder log = new StringBuilder("SHEET RENDERING CHECKS\n");
         checkDecoder();
-        log.append("PASS schema3 styles, hidden dimensions, sparse cells, ranges and invalid-model rejection\n");
+        log.append("PASS schema9 styles, hidden dimensions, sparse cells, ranges and invalid-model rejection\n");
         checkMergedViewport(context);
         log.append("PASS offscreen merged anchor, hidden rows/columns, merged grid suppression and pinned headers\n");
         checkText();
@@ -37,7 +37,7 @@ final class SheetRenderingChecks {
     }
 
     private static void checkDecoder() throws Exception {
-        String json = "{\"schemaVersion\":8,\"kind\":\"XLSX\",\"width\":595,\"warnings\":[],\"blocks\":[],\"pages\":[],"
+        String json = "{\"schemaVersion\":9,\"kind\":\"XLSX\",\"width\":595,\"warnings\":[],\"blocks\":[],\"pages\":[],"
             + "\"cellStyles\":[{\"fontSize\":13,\"bold\":true,\"italic\":true,\"underline\":true,\"color\":4279385946,"
             + "\"fill\":4294967295,\"alignment\":3,\"verticalAlignment\":\"BOTTOM\",\"wrap\":true,"
             + "\"borders\":[4278190335,null,4278190335,null]}],"
@@ -80,7 +80,7 @@ final class SheetRenderingChecks {
             JSONObject root = new JSONObject(json).put("kind", kind);
             root.put("sheets", new org.json.JSONArray()); root.put("cellStyles", new org.json.JSONArray());
             OfficeDocument legacy = DocumentDecoder.decode(root.toString());
-            check(legacy.kind.name().equals(kind) && legacy.sheets.isEmpty() && legacy.cellStyles.isEmpty(), kind + " schema3 decode");
+            check(legacy.kind.name().equals(kind) && legacy.sheets.isEmpty() && legacy.cellStyles.isEmpty(), kind + " schema9 decode");
         }
     }
 

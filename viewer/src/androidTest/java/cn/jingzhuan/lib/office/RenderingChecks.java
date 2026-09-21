@@ -147,9 +147,11 @@ final class RenderingChecks {
         check(texts.get(0).verticalAlignment == OfficeDocument.VerticalAlignment.TOP, "PPTX top anchor decoded");
         check(texts.get(1).verticalAlignment == OfficeDocument.VerticalAlignment.CENTER, "PPTX center anchor decoded");
         check(texts.get(2).verticalAlignment == OfficeDocument.VerticalAlignment.BOTTOM, "PPTX bottom anchor decoded");
-        check(images.get(0).imageCrop == null, "PPTX uncropped image decoded");
-        OfficeDocument.ImageCrop crop = images.get(1).imageCrop;
-        check(crop != null && near(crop.left, 0.5f, 0.01f) && near(crop.bottom, 0.5f, 0.01f), "PPTX asymmetric crop decoded");
+        check(images.get(0).imageBounds == null, "PPTX uncropped image decoded");
+        float[] bounds = images.get(1).imageBounds;
+        check(bounds != null && bounds.length == 4 && near(bounds[0], -72, 0.01f)
+            && near(bounds[1], 0, 0.01f) && near(bounds[2], 72, 0.01f) && near(bounds[3], 144, 0.01f),
+            "PPTX asymmetric crop becomes a local image destination");
 
         OfficeRenderer renderer = new OfficeRenderer();
         renderer.layout(document);

@@ -78,6 +78,7 @@ final class PptxPathChecks {
         plain.type = OfficeDocument.Type.RECT;
         plain.x = 125;
         plain.y = 10;
+        plain.transform = new float[] {1, 0, 0, 1, 125, 10};
         plain.width = 40;
         plain.height = 40;
         plain.fill = Color.GREEN;
@@ -110,8 +111,7 @@ final class PptxPathChecks {
         page.elements.add(fillOnly);
 
         OfficeDocument.Element flipped = pathElement(70, 170, 50, 40, MAGENTA, Color.TRANSPARENT, 0);
-        flipped.transform = new float[] {1, 0, 0, 1, 30, 0};
-        flipped.flipH = true;
+        flipped.transform = new float[] {-1, 0, 0, 1, 150, 170};
         flipped.paths.add(path(true, false,
             command("MOVE", 30, 0), command("LINE", 50, 20), command("LINE", 30, 40), command("CLOSE")));
         page.elements.add(flipped);
@@ -124,6 +124,7 @@ final class PptxPathChecks {
         element.type = OfficeDocument.Type.PATH;
         element.x = x;
         element.y = y;
+        element.transform = new float[] {1, 0, 0, 1, x, y};
         element.width = width;
         element.height = height;
         element.fill = fill;
@@ -136,8 +137,7 @@ final class PptxPathChecks {
         OfficeDocument.GradientFill fill = new OfficeDocument.GradientFill();
         fill.colors = new int[] {Color.RED, Color.BLUE};
         fill.positions = new float[] {0, 1};
-        fill.angle = 0;
-        fill.scaled = false;
+        fill.points = new float[] {0, 30, 100, 30};
         return fill;
     }
 

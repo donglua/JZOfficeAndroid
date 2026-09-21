@@ -2,6 +2,7 @@ package cn.jingzhuan.lib.office;
 
 import static cn.jingzhuan.lib.office.PptxRenderingChecks.check;
 import static cn.jingzhuan.lib.office.PptxRenderingChecks.color;
+import static cn.jingzhuan.lib.office.PptxRenderingChecks.near;
 
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -29,6 +30,7 @@ final class PptxBackgroundChecks {
             OfficeDocument document = source.document;
             check(document.kind == OfficeDocument.Kind.PPTX && document.pages.size() == 3,
                 "Background sample contains inherited, solid and transformed fills");
+            geometry(document);
             OfficeDocument.Element image = document.pages.get(0).elements.get(1);
             check(image.type == OfficeDocument.Type.IMAGE && IMAGE.equals(image.image),
                 "PNG relationship resolves to the sample image");
@@ -43,6 +45,31 @@ final class PptxBackgroundChecks {
         }
         return "PASS PPTX background sample URI/JNI, inherited gradient, slide-space fill, transparent PNG and shader reset pixels\n"
             + "SCREENSHOTS pptx-backgrounds.png\n";
+    }
+
+    private static void geometry(OfficeDocument document) {
+        OfficeDocument.GradientFill background = document.pages.get(0).elements.get(0).fillGradient;
+        check(background != null, "Native inherited background gradient exists");
+        array(background.points, new float[] {160, 0, 160, 180}, "Native background gradient endpoints");
+        check(background.transform == null, "Slide background uses local gradient points");
+        float[][] transforms = {{0, 1, -1, 0, 110, 50}, {0, -1, -1, 0, 275, 135}};
+        float[][] inverses = {{0, -1, 1, 0, -50, 110}, {0, -1, -1, 0, 135, 275}};
+        int shapes = 0;
+        for (OfficeDocument.Element element : document.pages.get(2).elements) {
+            if (element.fillGradient == null || element.fillGradient.transform == null) continue;
+            check(shapes < transforms.length, "Expected transformed background fill count");
+            array(element.transform, transforms[shapes], "Native background shape matrix " + shapes);
+            array(element.fillGradient.points, new float[] {160, 0, 160, 180},
+                "Native shape gradient retains slide endpoints " + shapes);
+            array(element.fillGradient.transform, inverses[shapes], "Native shader inverse " + shapes);
+            shapes++;
+        }
+        check(shapes == 2, "Native gradients exercise centered rotation and grouped horizontal flip");
+    }
+
+    private static void array(float[] actual, float[] expected, String label) {
+        check(actual != null && actual.length == expected.length, label + " length");
+        for (int i = 0; i < expected.length; i++) near(actual[i], expected[i], 0.001f, label + " coefficient " + i);
     }
 
     private static void capture(Context context, OfficeDocument document, Map<String, Bitmap> images) throws Exception {

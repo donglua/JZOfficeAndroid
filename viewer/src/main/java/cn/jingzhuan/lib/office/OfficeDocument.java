@@ -29,14 +29,13 @@ final class OfficeDocument {
 
     static final class Element {
         Type type = Type.TEXT;
-        float x, y, width, height, rotation;
+        float x, y, width, height;
         float[] transform = {1, 0, 0, 1, 0, 0};
-        boolean flipH, flipV;
         float padding = 4;
         int fill = 0x00000000, stroke = 0x00000000;
         float strokeWidth = 1;
         String image;
-        ImageCrop imageCrop;
+        float[] imageBounds;
         VerticalAlignment verticalAlignment = VerticalAlignment.TOP;
         boolean textWrap = true;
         final List<Paragraph> paragraphs = new ArrayList<>();
@@ -60,12 +59,8 @@ final class OfficeDocument {
     static final class GradientFill {
         int[] colors;
         float[] positions;
-        float angle;
-        boolean scaled, inSlideSpace;
-    }
-
-    static final class ImageCrop {
-        float left, top, right, bottom;
+        float[] points;
+        float[] transform;
     }
 
     static final class Paragraph {

@@ -10,12 +10,9 @@ import android.text.StaticLayout;
 import android.text.style.AbsoluteSizeSpan;
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import org.json.JSONArray;
-import org.json.JSONObject;
 
 final class PptxRenderingChecks {
     static final String FIXTURE = "pptx-compat.pptx";
@@ -25,11 +22,14 @@ final class PptxRenderingChecks {
     private PptxRenderingChecks() { }
 
     static String run(OfficeInstrumentation instrumentation) throws Exception {
+        return PptxTextChecks.run(instrumentation) + runGeometry(instrumentation);
+    }
+
+    static String runGeometry(OfficeInstrumentation instrumentation) throws Exception {
         Context context = instrumentation.getTargetContext();
         Uri uri = Uri.parse("content://" + context.getPackageName() + ".fixtures/" + FIXTURE);
         Map<String, Bitmap> images = new HashMap<>();
         StringBuilder log = new StringBuilder("PPTX COMPATIBILITY CHECKS\n");
-        log.append(PptxTextChecks.run(instrumentation));
         try (OfficePackage source = OfficePackage.open(context, uri)) {
             String json = NativeCore.parse(source.file.getAbsolutePath());
             OfficeDocument document = source.document;
@@ -43,8 +43,7 @@ final class PptxRenderingChecks {
             }
             check(images.keySet().equals(Collections.singleton(IMAGE)), "Fixture image relationship resolves to expected package part");
             color(images.get(IMAGE), 0, 0, TEAL, "Native fixture image pixel");
-            malformedTransforms(json);
-            log.append("PASS malformed affine arrays and coefficients rejected\n");
+            log.append(PptxGeometryChecks.run(context, json));
             instrumentation.runOnMainChecked(() -> {
                 geometry(document);
                 localFlips();
@@ -77,8 +76,7 @@ final class PptxRenderingChecks {
         matrix(filled(document, ORANGE), new float[] {0, 1, -1, 0, 480, 30}, "Rotated group");
         OfficeDocument.Element picture = image(document);
         check(IMAGE.equals(picture.image), "Grouped picture resolves rImage to normalized package part");
-        matrix(picture, new float[] {1, 0, 0, 1, 200, 60}, "Grouped picture");
-        check(picture.flipH && !picture.flipV, "Picture horizontal flip decoded");
+        matrix(picture, new float[] {-1, 0, 0, 1, 280, 60}, "Grouped horizontally flipped picture");
         near(picture.x, 0, 0.01f, "Picture local x");
         near(picture.y, 0, 0.01f, "Picture local y");
         near(picture.width, 80, 0.01f, "Picture width in points");
@@ -149,21 +147,27 @@ final class PptxRenderingChecks {
             {Color.YELLOW, Color.BLUE, Color.GREEN, Color.RED},
             {Color.YELLOW, Color.BLUE, Color.GREEN, Color.RED}
         };
+        float[][] imageTransforms = {
+            {1, 0, 0, 1, 10, 10}, {-1, 0, 0, 1, 110, 10},
+            {1, 0, 0, -1, 130, 50}, {-1, 0, 0, -1, 230, 50},
+            {-1, 0, 0, -1, 290, 50}
+        };
+        float[][] lineTransforms = {
+            {1, 0, 0, 1, 10, 90}, {-1, 0, 0, 1, 110, 90},
+            {1, 0, 0, -1, 130, 130}, {-1, 0, 0, -1, 230, 130}
+        };
         for (int i = 0; i < expected.length; i++) {
             OfficeDocument.Element image = new OfficeDocument.Element();
             image.type = OfficeDocument.Type.IMAGE; image.image = "quadrants";
             image.x = 10 + i * 60; image.y = 10; image.width = image.height = 40;
-            image.flipH = i == 1 || i >= 3; image.flipV = i >= 2;
-            if (i == 4) {
-                image.imageCrop = new OfficeDocument.ImageCrop();
-                image.imageCrop.left = image.imageCrop.top = 0.25f;
-            }
+            image.transform = imageTransforms[i];
+            if (i == 4) image.imageBounds = new float[] {-13.333333f, -13.333333f, 40, 40};
             page.elements.add(image);
             if (i < 4) {
                 OfficeDocument.Element line = new OfficeDocument.Element();
                 line.type = OfficeDocument.Type.LINE; line.x = image.x; line.y = 90;
                 line.width = line.height = 40; line.stroke = ORANGE; line.strokeWidth = 4;
-                line.flipH = image.flipH; line.flipV = image.flipV; page.elements.add(line);
+                line.transform = lineTransforms[i]; page.elements.add(line);
             }
         }
         OfficeRenderer renderer = new OfficeRenderer(); renderer.layout(document);
@@ -198,7 +202,8 @@ final class PptxRenderingChecks {
         image.transform = new float[] {100, 0, 0, 100, 0, 0}; page.elements.add(image);
         OfficeDocument.Element line = new OfficeDocument.Element();
         line.type = OfficeDocument.Type.LINE; line.x = 80; line.y = 40; line.width = 40; line.height = 0;
-        line.rotation = 90; line.flipH = true; line.stroke = ORANGE; line.strokeWidth = 0.5f; page.elements.add(line);
+        line.transform = new float[] {0, -1, -1, 0, 100, 60};
+        line.stroke = ORANGE; line.strokeWidth = 0.5f; page.elements.add(line);
         OfficeRenderer renderer = new OfficeRenderer(); renderer.layout(document);
         check(renderer.visibleImages(25, 25, 49, 49, 0).equals(Collections.singleton("quadrants")), "Fractional picture visible inside 50x50");
         check(renderer.visibleImages(51, 0, 60, 50, 0).isEmpty(), "Fractional picture excluded beyond x=50");
@@ -260,6 +265,7 @@ final class PptxRenderingChecks {
         OfficeDocument.Page page = new OfficeDocument.Page(); page.width = 960; page.height = 540; page.background = Color.WHITE;
         OfficeDocument.Element box = new OfficeDocument.Element();
         box.type = OfficeDocument.Type.TEXT; box.x = 164; box.y = 104; box.width = 632; box.height = 277;
+        box.transform = new float[] {1, 0, 0, 1, 164, 104};
         for (String title : new String[] {"短线超跌15以下的应用策略", "短线超跌15-30%的应用策略",
             "短线超跌30-50以上的应用策略", "短线超跌50%以上应用策略"}) {
             box.paragraphs.add(paragraph(title, 24));
@@ -289,33 +295,6 @@ final class PptxRenderingChecks {
         OfficeDocument.Run run = new OfficeDocument.Run(); run.text = text; run.size = size; run.bold = true;
         paragraph.runs.add(run); paragraph.alignment = 1; paragraph.after = 0; paragraph.before = 0;
         return paragraph;
-    }
-
-    private static void malformedTransforms(String json) throws Exception {
-        Object[] invalid = {
-            new JSONArray("[1,0,0,1,0]"), new JSONArray("[1,0,0,1,0,0,0]"),
-            new JSONArray("[1,0,0,1,100001,0]"), new JSONArray("[1,0,0,1,-100001,0]"),
-            new JSONArray("[1,0,0,1,\"NaN\",0]"), new JSONArray("[1,0,0,1,\"Infinity\",0]"),
-            new JSONArray("[1,0,0,1,\"invalid\",0]"), new JSONArray("[1,0,0,1,null,0]"),
-            JSONObject.NULL, "not-an-array"
-        };
-        for (Object value : invalid) {
-            JSONObject root = new JSONObject(json);
-            root.getJSONArray("pages").getJSONObject(0).getJSONArray("elements").getJSONObject(0).put("transform", value);
-            reject(root, "Malformed transform " + value);
-        }
-        JSONObject missing = new JSONObject(json);
-        missing.getJSONArray("pages").getJSONObject(0).getJSONArray("elements").getJSONObject(0).remove("transform");
-        reject(missing, "Missing transform");
-    }
-
-    private static void reject(JSONObject root, String label) throws Exception {
-        try { DocumentDecoder.decode(root.toString()); }
-        catch (IOException expected) {
-            check("Invalid core display model".equals(expected.getMessage()), label + " reports invalid model");
-            return;
-        }
-        throw new AssertionError(label + " was accepted");
     }
 
     private static void capture(Context context, OfficeDocument document, Map<String, Bitmap> images,

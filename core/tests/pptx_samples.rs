@@ -114,7 +114,7 @@ fn background_sample_retains_slide_space_fill_through_rotation_flip_and_group_tr
     for (actual, expected) in transformed
         .transform
         .into_iter()
-        .zip([0.0, 1.0, -1.0, 0.0, 275.0, 55.0])
+        .zip([0.0, -1.0, -1.0, 0.0, 275.0, 135.0])
     {
         checks::near(actual, expected);
     }

@@ -236,12 +236,12 @@ impl Render<'_> {
                 "PPTX exceeds 100000 custom path commands",
             ));
         }
-        if !transform.accepts(&element) {
+        element.transform = transform.0;
+        if !transform.accepts(&element) || !super::drawing::prepare(&mut element, page, self.doc) {
             self.doc
                 .warn("PPTX elements with excessive transformed bounds were omitted.");
             return Ok(());
         }
-        element.transform = transform.0;
         page.elements.push(element);
         Ok(())
     }

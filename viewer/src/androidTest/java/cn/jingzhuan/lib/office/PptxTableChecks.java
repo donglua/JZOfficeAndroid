@@ -2,6 +2,7 @@ package cn.jingzhuan.lib.office;
 
 import static cn.jingzhuan.lib.office.PptxRenderingChecks.check;
 import static cn.jingzhuan.lib.office.PptxRenderingChecks.color;
+import static cn.jingzhuan.lib.office.PptxRenderingChecks.near;
 
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -117,6 +118,10 @@ final class PptxTableChecks {
         document.blocks.add(table(0, 0, 120, 40, null));
         OfficeRenderer renderer = new OfficeRenderer();
         renderer.layout(document);
+        float[] origin = {0, 0};
+        renderer.pages.get(0).elements.get(0).transform.mapPoints(origin);
+        near(origin[0], 32, 0.001f, "DOCX layout still adds its horizontal margin");
+        near(origin[1], 32, 0.001f, "DOCX layout still adds its vertical margin");
         Bitmap bitmap = Bitmap.createBitmap(200, 120, Bitmap.Config.ARGB_8888);
         try {
             renderer.draw(new Canvas(bitmap), 0, renderer.height, Collections.emptyMap());
@@ -131,6 +136,7 @@ final class PptxTableChecks {
         table.type = OfficeDocument.Type.TABLE;
         table.x = x;
         table.y = y;
+        table.transform = new float[] {1, 0, 0, 1, x, y};
         table.width = width;
         table.height = height;
         int rows = fills == null ? 1 : fills.length;

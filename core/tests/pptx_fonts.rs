@@ -28,7 +28,7 @@ fn serializes_latin_typeface_when_explicitly_saved() -> TestResult {
         let run = serde_json::to_value(&runs(&document)?[0])?;
 
         // Then the raw font name and existing formatting survive the current schema.
-        assert_eq!(document.schema_version, 8);
+        assert_eq!(document.schema_version, 9);
         assert_eq!(
             run,
             json!({

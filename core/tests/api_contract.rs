@@ -54,8 +54,8 @@ fn output_schema_version_and_serialized_field_names_are_stable() -> TestResult {
 
         let json = serde_json::to_value(&document)?;
 
-        assert_eq!(document.schema_version, 8);
-        assert_eq!(json["schemaVersion"], 8);
+        assert_eq!(document.schema_version, 9);
+        assert_eq!(json["schemaVersion"], 9);
         assert!(json.get("schema_version").is_none());
         assert!(json["warnings"].is_array());
         assert_eq!(json["sheets"], serde_json::json!([]));
@@ -67,15 +67,18 @@ fn output_schema_version_and_serialized_field_names_are_stable() -> TestResult {
         };
         assert_eq!(element["type"], "TEXT");
         assert!(element["strokeWidth"].is_number());
-        assert_eq!(
-            element["transform"],
-            serde_json::json!([1.0, 0.0, 0.0, 1.0, 0.0, 0.0])
-        );
-        assert_eq!(element["flipH"], false);
-        assert_eq!(element["flipV"], false);
+        let expected = match document.kind {
+            Kind::DOCX => serde_json::json!([1.0, 0.0, 0.0, 1.0, 0.0, 0.0]),
+            Kind::PPTX => serde_json::json!([1.0, 0.0, 0.0, 1.0, 36.0, 24.0]),
+            Kind::XLSX => panic!("This fixture is a paged document"),
+        };
+        assert_eq!(element["transform"], expected);
+        assert!(element.get("flipH").is_none());
+        assert!(element.get("flipV").is_none());
         assert!(element["columnWidths"].is_array());
         assert_eq!(element["verticalAlignment"], "TOP");
-        assert!(element["imageCrop"].is_null());
+        assert!(element.get("imageCrop").is_none());
+        assert!(element["imageBounds"].is_null());
         assert_eq!(element["paragraphs"][0]["lineSpacingRule"], "AUTO");
         assert_eq!(element["paragraphs"][0]["lineSpacing"], 1.0);
         assert_eq!(element["paragraphs"][0]["firstLineIndent"], 0.0);

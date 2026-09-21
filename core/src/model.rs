@@ -43,8 +43,13 @@ pub struct Path {
 pub struct GradientFill {
     pub colors: Vec<u32>,
     pub positions: Vec<f32>,
+    pub points: [f32; 4],
+    pub transform: Option<[f32; 6]>,
+    #[serde(skip_serializing)]
     pub angle: f32,
+    #[serde(skip_serializing)]
     pub scaled: bool,
+    #[serde(skip_serializing)]
     pub in_slide_space: bool,
 }
 
@@ -90,7 +95,7 @@ pub struct Document {
 impl Document {
     pub fn new(kind: Kind) -> Self {
         Self {
-            schema_version: 8,
+            schema_version: 9,
             kind,
             width: 595.0,
             pages: Vec::new(),
@@ -125,16 +130,22 @@ pub struct Element {
     pub y: f32,
     pub width: f32,
     pub height: f32,
+    #[serde(skip_serializing)]
     pub rotation: f32,
+    /// PPTX local-to-slide drawing matrix, including position, rotation and flips.
     pub transform: [f32; 6],
+    #[serde(skip_serializing)]
     pub flip_h: bool,
+    #[serde(skip_serializing)]
     pub flip_v: bool,
     pub padding: f32,
     pub fill: u32,
     pub stroke: u32,
     pub stroke_width: f32,
     pub image: Option<String>,
+    #[serde(skip_serializing)]
     pub image_crop: Option<ImageCrop>,
+    pub image_bounds: Option<[f32; 4]>,
     pub vertical_alignment: VerticalAlignment,
     pub text_wrap: bool,
     pub paragraphs: Vec<Paragraph>,
@@ -163,6 +174,7 @@ impl Default for Element {
             stroke_width: 1.0,
             image: None,
             image_crop: None,
+            image_bounds: None,
             vertical_alignment: VerticalAlignment::Top,
             text_wrap: true,
             paragraphs: Vec::new(),

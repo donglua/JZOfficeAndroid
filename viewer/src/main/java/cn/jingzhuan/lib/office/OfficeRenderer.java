@@ -48,7 +48,7 @@ final class OfficeRenderer {
                 Element drawn = element(source, width - 64, true, document);
                 drawn.x = 32; drawn.y = y;
                 if (source.type == OfficeDocument.Type.IMAGE) drawn.x += (width - 64 - drawn.width) / 2;
-                position(drawn);
+                position(drawn, true);
                 page.elements.add(drawn); y += drawn.height + 6;
             }
             page.height = Math.max(300, y + 32); pages.add(page); height = page.height;
@@ -58,13 +58,6 @@ final class OfficeRenderer {
                 page.width = source.width; page.height = source.height; page.background = source.background;
                 for (OfficeDocument.Element e : source.elements) {
                     Element drawn = element(e, e.width, false, document);
-                    if (e.fillGradient != null && e.fillGradient.inSlideSpace) {
-                        Matrix inverse = new Matrix();
-                        if (drawn.transform.invert(inverse)) {
-                            drawn.fillShader = gradient(e.fillGradient, page.width, page.height);
-                            drawn.fillShader.setLocalMatrix(inverse);
-                        } else document.warn("Slide background fill has an invalid shape transform");
-                    }
                     page.elements.add(drawn);
                 }
                 pages.add(page); height += page.height + 16;
@@ -89,8 +82,8 @@ final class OfficeRenderer {
             }
             d.paths.add(path);
         }
-        if (source.fillGradient != null && !source.fillGradient.inSlideSpace) {
-            d.fillShader = gradient(source.fillGradient, d.width, d.height);
+        if (source.fillGradient != null) {
+            d.fillShader = gradient(source.fillGradient);
         }
         if (source.type == OfficeDocument.Type.IMAGE && flow) {
             float w = source.width > 0 ? source.width : available;
@@ -129,30 +122,27 @@ final class OfficeRenderer {
                 for (OfficeTextLayout.Block block : d.texts) block.y += offset;
             }
         }
-        position(d);
+        position(d, flow);
         return d;
     }
 
-    private Shader gradient(OfficeDocument.GradientFill source, float width, float height) {
-        double radians = Math.toRadians(source.angle);
-        float dx = (float) Math.cos(radians), dy = (float) Math.sin(radians);
-        if (source.scaled) { dx *= width; dy *= height; }
-        float length = (float) Math.hypot(dx, dy);
-        if (length < 0.0001f) { dx = 1; dy = 0; length = 1; }
-        dx /= length; dy /= length;
-        float span = Math.abs(width * dx) + Math.abs(height * dy);
-        float cx = width / 2, cy = height / 2;
-        return new LinearGradient(cx - dx * span / 2, cy - dy * span / 2,
-            cx + dx * span / 2, cy + dy * span / 2, source.colors, source.positions, Shader.TileMode.CLAMP);
+    private Shader gradient(OfficeDocument.GradientFill source) {
+        float[] p = source.points;
+        Shader shader = new LinearGradient(p[0], p[1], p[2], p[3], source.colors, source.positions, Shader.TileMode.CLAMP);
+        if (source.transform != null) {
+            float[] m = source.transform;
+            Matrix local = new Matrix();
+            local.setValues(new float[] {m[0], m[2], m[4], m[1], m[3], m[5], 0, 0, 1});
+            shader.setLocalMatrix(local);
+        }
+        return shader;
     }
 
-    private void position(Element d) {
+    private void position(Element d, boolean flow) {
         OfficeDocument.Element e = d.source;
         float[] m = e.transform;
         d.transform.setValues(new float[] {m[0], m[2], m[4], m[1], m[3], m[5], 0, 0, 1});
-        d.transform.preTranslate(d.x, d.y);
-        d.transform.preRotate(e.rotation, d.width / 2, d.height / 2);
-        d.transform.preScale(e.flipH ? -1 : 1, e.flipV ? -1 : 1, d.width / 2, d.height / 2);
+        if (flow) d.transform.preTranslate(d.x, d.y);
         float stroke = (e.stroke >>> 24) == 0 ? 0 : Math.max(0, e.strokeWidth) / 2;
         d.bounds.set(-stroke, -stroke, d.width + stroke, d.height + stroke);
         if (!e.textWrap) for (OfficeTextLayout.Block block : d.texts) {
@@ -238,12 +228,9 @@ final class OfficeRenderer {
             Bitmap bitmap = images.get(e.image);
             if (bitmap != null) {
                 paint.setColor(0xffffffff);
-                if (e.imageCrop != null) {
-                    OfficeDocument.ImageCrop crop = e.imageCrop;
-                    float fullWidth = d.width / (1 - crop.left - crop.right);
-                    float fullHeight = d.height / (1 - crop.top - crop.bottom);
-                    rect.set(-crop.left * fullWidth, -crop.top * fullHeight,
-                        (1 - crop.left) * fullWidth, (1 - crop.top) * fullHeight);
+                if (e.imageBounds != null) {
+                    float[] bounds = e.imageBounds;
+                    rect.set(bounds[0], bounds[1], bounds[2], bounds[3]);
                 }
                 canvas.drawBitmap(bitmap, null, rect, paint);
             } else { paint.setColor(0xffe0e0e0); canvas.drawRect(rect, paint); }

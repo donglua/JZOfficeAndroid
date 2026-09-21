@@ -164,7 +164,7 @@ PPTX 图表仅支持单个标准 `lineChart`，读取文件内保存的数值缓
 
 PPTX 文本框支持继承和覆盖 `wrap`：`none` 按带样式的文字宽度排版，保留显式换行、字号和相对原文本框的左/中/右对齐；`square` 或默认值按文本框宽度换行。非换行文字可以超出文本框，最终仍受幻灯片边界裁剪。
 
-内部 JSON 模型为 `schemaVersion = 8`，包含元素的组合变换、翻转、自定义 DrawingML 路径、图形线性渐变及其坐标空间、表格单元格填充和文本换行字段，core 与 viewer 应使用同次构建产物；不匹配时解码器会明确报错。
+内部 JSON 模型为 `schemaVersion = 9`。Rust 预计算 PPTX 元素的完整绘制矩阵（含平移、旋转和翻转）、线性渐变端点及背景渐变的逆矩阵、图片裁剪后的绘制矩形；Java 读取结果并创建 Android 绘图对象，文字测量和 DOCX 流式排版仍在 Java 中完成。模型还包含自定义 DrawingML 路径、表格单元格填充和文本换行字段。core 与 viewer 应使用同次构建产物；不匹配时解码器会明确报错。JNI 调用次数保持为每份文档一次。
 
 ## 本地 URI 约定
 
@@ -498,6 +498,12 @@ PPTX 兼容性回归使用 `-e suite pptx`，通过标志为 `ALL PPTX CHECKS PA
 
 ```sh
 adb shell am instrument -w -e suite pptx cn.jingzhuan.lib.office.test/cn.jingzhuan.lib.office.OfficeInstrumentation
+```
+
+纯几何迁移回归使用 `-e suite pptx-geometry`，通过标志为 `ALL PPTX GEOMETRY CHECKS PASSED`。覆盖 schema 9 几何字段校验、组合与旋转/翻转变换、图片裁剪、零高度线段、渐变端点、背景填充逆变换，以及路径和表格像素。该入口不替代包含文字适配、图表、主题色和换行检查的完整 `pptx` 专项。
+
+```sh
+adb shell am instrument -w -e suite pptx-geometry cn.jingzhuan.lib.office.test/cn.jingzhuan.lib.office.OfficeInstrumentation
 ```
 
 ## 许可证

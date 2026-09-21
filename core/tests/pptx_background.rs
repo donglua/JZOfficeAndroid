@@ -126,8 +126,15 @@ fn use_background_fill_keeps_inherited_gradient_in_slide_coordinates() -> TestRe
         shape["fillGradient"]["colors"],
         page["elements"][0]["fillGradient"]["colors"]
     );
-    assert_eq!(shape["fillGradient"]["inSlideSpace"], true);
-    assert_eq!(page["elements"][0]["fillGradient"]["inSlideSpace"], false);
+    assert_eq!(
+        shape["fillGradient"]["points"],
+        page["elements"][0]["fillGradient"]["points"]
+    );
+    assert_eq!(
+        shape["fillGradient"]["transform"],
+        serde_json::json!([1.0, 0.0, 0.0, 1.0, -100.0, -200.0])
+    );
+    assert!(page["elements"][0]["fillGradient"]["transform"].is_null());
     assert_eq!(shape["x"], 100.0);
     assert_eq!(shape["y"], 200.0);
     Ok(())

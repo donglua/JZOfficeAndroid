@@ -1,6 +1,7 @@
 mod chart;
 mod chart_data;
 mod colors;
+mod drawing;
 mod geometry;
 mod gradient;
 mod inheritance;

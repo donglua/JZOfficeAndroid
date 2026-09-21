@@ -22,7 +22,7 @@ public final class OfficeInstrumentation extends Instrumentation {
     private PreviewTestActivity activity;
     private final StringBuilder results = new StringBuilder();
     private boolean layoutOnly, limitsOnly, imagesOnly, xlsxOnly, demoOnly, pptxOnly, pathsOnly, tablesOnly, backgroundsOnly;
-    private boolean demoSamplesOnly, sheetLayoutOnly;
+    private boolean demoSamplesOnly, sheetLayoutOnly, pptxGeometryOnly;
 
     @Override public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
@@ -34,6 +34,7 @@ public final class OfficeInstrumentation extends Instrumentation {
         demoSamplesOnly = arguments != null && "demo-samples".equals(arguments.getString("suite"));
         sheetLayoutOnly = arguments != null && "sheet-layout".equals(arguments.getString("suite"));
         pptxOnly = arguments != null && "pptx".equals(arguments.getString("suite"));
+        pptxGeometryOnly = arguments != null && "pptx-geometry".equals(arguments.getString("suite"));
         pathsOnly = arguments != null && "paths".equals(arguments.getString("suite"));
         tablesOnly = arguments != null && "tables".equals(arguments.getString("suite"));
         backgroundsOnly = arguments != null && "backgrounds".equals(arguments.getString("suite"));
@@ -66,6 +67,15 @@ public final class OfficeInstrumentation extends Instrumentation {
             if (demoSamplesOnly) {
                 results.append(DemoSampleChecks.run(this));
                 output.putString("stream", "\n" + results + "ALL DEMO SAMPLE CHECKS PASSED\n");
+                finish(Activity.RESULT_OK, output);
+                return;
+            }
+            if (pptxGeometryOnly) {
+                results.append(PptxRenderingChecks.runGeometry(this));
+                results.append(PptxPathChecks.run(this));
+                results.append(PptxTableChecks.run(this));
+                results.append(PptxBackgroundChecks.run(this));
+                output.putString("stream", "\n" + results + "ALL PPTX GEOMETRY CHECKS PASSED\n");
                 finish(Activity.RESULT_OK, output);
                 return;
             }

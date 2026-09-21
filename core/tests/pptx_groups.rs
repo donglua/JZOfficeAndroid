@@ -107,14 +107,16 @@ fn hidden_or_invalid_groups_do_not_leak_their_children() -> TestResult {
 }
 
 #[test]
-fn picture_flip_attributes_are_preserved() -> TestResult {
+fn picture_flips_are_composed_into_the_drawing_transform() -> TestResult {
     let doc = document(
         r#"<p:pic><p:blipFill><a:blip r:embed="rImage"/></p:blipFill><p:spPr><a:xfrm flipH="1" flipV="true"><a:off x="0" y="0"/><a:ext cx="1270000" cy="635000"/></a:xfrm></p:spPr></p:pic>"#,
     )?;
     let image = checks::element(&doc.pages[0].elements, ElementType::IMAGE)?;
     let json = serde_json::to_value(image)?;
-    assert_eq!(json["flipH"], true);
-    assert_eq!(json["flipV"], true);
+    assert_eq!(
+        json["transform"],
+        serde_json::json!([-1.0, 0.0, 0.0, -1.0, 100.0, 50.0])
+    );
     Ok(())
 }
 
@@ -181,7 +183,7 @@ fn leaf_rotation_survives_group_coordinate_normalization() -> TestResult {
     for (actual, expected) in rect
         .transform
         .iter()
-        .zip([0.0, 1.0, -1.0, 0.0, 150.0, 55.0])
+        .zip([0.0, -1.0, -1.0, 0.0, 150.0, 75.0])
     {
         checks::near(*actual, expected);
     }

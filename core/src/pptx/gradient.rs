@@ -42,6 +42,8 @@ impl Theme {
         Some(GradientFill {
             colors: values.iter().map(|(_, color)| *color).collect(),
             positions: values.iter().map(|(position, _)| *position).collect(),
+            points: [0.0; 4],
+            transform: None,
             angle: angle % 360.0,
             scaled: flag(linear.attr("scaled"), true),
             in_slide_space: false,

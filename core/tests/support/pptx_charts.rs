@@ -163,18 +163,8 @@ pub fn data_segments(page: &Page, color: u32) -> Vec<[(f32, f32); 2]> {
 #[cfg(test)]
 pub fn endpoints(element: &Element) -> [(f32, f32); 2] {
     let [a, b, c, d, tx, ty] = element.transform;
-    let (sin, cos) = element.rotation.to_radians().sin_cos();
-    let mut points = [(0.0, 0.0), (element.width, element.height)].map(|(x, y)| {
-        let x = if element.flip_h { element.width - x } else { x } - element.width / 2.0;
-        let y = if element.flip_v {
-            element.height - y
-        } else {
-            y
-        } - element.height / 2.0;
-        let x0 = element.x + element.width / 2.0 + cos * x - sin * y;
-        let y0 = element.y + element.height / 2.0 + sin * x + cos * y;
-        (a * x0 + c * y0 + tx, b * x0 + d * y0 + ty)
-    });
+    let mut points = [(0.0, 0.0), (element.width, element.height)]
+        .map(|(x, y)| (a * x + c * y + tx, b * x + d * y + ty));
     points.sort_by(|a, b| a.0.total_cmp(&b.0));
     points
 }
