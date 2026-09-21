@@ -4,7 +4,24 @@
 
 这是基础预览实现，不保证与 Microsoft Office 的版式一致。旧版 `.doc/.ppt/.xls`、加密文档、ZIP64/分卷容器和编辑功能不在支持范围内。
 
-当前源码版本为 **0.2.0**，变更见 [CHANGELOG](CHANGELOG.md)。发布产物见 [v0.2.0 Release](https://github.com/donglua/JZOfficeAndroid/releases/tag/v0.2.0)，Maven Central 坐标为 [viewer](https://central.sonatype.com/artifact/io.github.donglua/viewer/0.2.0) 和 [viewer-online](https://central.sonatype.com/artifact/io.github.donglua/viewer-online/0.2.0)。发布可用性以对应仓库为准；设备验收未完成。
+当前源码版本为 **0.2.0**，变更见 [CHANGELOG](CHANGELOG.md)。发布产物见 [v0.2.0 Release](https://github.com/donglua/JZOfficeAndroid/releases/tag/v0.2.0)，Maven Central 坐标为 [viewer](https://central.sonatype.com/artifact/io.github.donglua/viewer/0.2.0) 和 [viewer-online](https://central.sonatype.com/artifact/io.github.donglua/viewer-online/0.2.0)。发布可用性以对应仓库为准；完整设备验收尚未完成。
+
+## 预览
+
+Demo 内置样例的 Android 真机截图。点击图片查看大图。
+
+<table>
+  <tr>
+    <th>DOCX</th>
+    <th>PPTX</th>
+    <th>XLSX</th>
+  </tr>
+  <tr>
+    <td><a href="docs/images/preview-docx.png"><img src="docs/images/preview-docx.png" width="260" alt="DOCX 预览：文字样式、图片与表格"></a></td>
+    <td><a href="docs/images/preview-pptx.png"><img src="docs/images/preview-pptx.png" width="260" alt="PPTX 预览：组合图形与折线图"></a></td>
+    <td><a href="docs/images/preview-xlsx.png"><img src="docs/images/preview-xlsx.png" width="260" alt="XLSX 预览：单元格样式、数字格式与工作表标签"></a></td>
+  </tr>
+</table>
 
 ## 模块
 
@@ -373,7 +390,7 @@ signing.password=<gpg-passphrase>
 
 ## 验证
 
-0.2.0 本地验证记录：Debug/Release 构建、lint、47 项网络检查、缓存检查和 Rust 检查已通过。双模块本地发布产物检查已通过；独立消费项目使用 Gradle 元数据和纯 POM 均能从 `viewer-online:0.2.0` 解析出同版本的 `viewer`。正式签名和上传由发布 CI 执行，结果见 [Actions](https://github.com/donglua/JZOfficeAndroid/actions/workflows/publish-sonatype.yml)。Android Instrumentation APK 已编译，但尚无可用设备或 AVD 执行，**设备验收未完成**。以下命令为复验入口，不表示已完成设备测试。
+0.2.0 验证记录：Debug/Release 构建、lint、47 项网络检查、缓存检查和 Rust 检查已通过。双模块本地发布产物检查已通过；独立消费项目使用 Gradle 元数据和纯 POM 均能从 `viewer-online:0.2.0` 解析出同版本的 `viewer`。正式签名和上传由发布 CI 执行，结果见 [Actions](https://github.com/donglua/JZOfficeAndroid/actions/workflows/publish-sonatype.yml)。`demo-samples` 已在 Android 真机通过，覆盖三种内置样例的打开、格式识别、翻页和截图；**在线预览及其他测试套件的完整设备验收尚未完成**。以下命令为复验入口，不表示所有设备测试均已执行。
 
 ```sh
 cargo test --workspace
