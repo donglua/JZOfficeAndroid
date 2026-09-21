@@ -33,7 +33,7 @@ fn showcase_preserves_all_source_slide_content_in_chapter_order() -> TestResult 
         (pptx::parts(), 2, true),
         (pptx_compat::parts(), 1, true),
         (pptx_charts::parts(), 2, true),
-        (pptx_colors::parts(), 2, true),
+        (pptx_colors::showcase_parts(), 2, true),
         (pptx_typography::parts(), 2, true),
         (pptx_wrapping_showcase::parts()?, 3, false),
         (pptx_backgrounds::parts(), 3, true),
@@ -107,14 +107,14 @@ fn showcase_preserves_all_source_slide_content_in_chapter_order() -> TestResult 
 fn showcase_scales_text_and_geometry_uniformly() -> TestResult {
     let document = showcase()?;
 
-    let title = &document.pages[6].elements[0];
+    let title = &document.pages[6].elements[1];
     let number = &document.pages[8].elements[0];
     let image = checks::element(&document.pages[13].elements, ElementType::IMAGE)?;
 
-    checks::near(title.width, 520.0 * 83.0 / 90.0);
-    checks::near(title.height, 140.0 * 83.0 / 90.0);
-    assert!((title.paragraphs[0].runs[0].size - 64.0 * 83.0 / 90.0).abs() < 0.01);
-    assert_eq!(title.paragraphs[0].runs[0].color, 0xfffff3dd);
+    checks::near(title.width, 640.0 * 83.0 / 90.0);
+    checks::near(title.height, 72.0 * 83.0 / 90.0);
+    assert!((title.paragraphs[0].runs[0].size - 52.0 * 83.0 / 90.0).abs() < 0.01);
+    assert_eq!(title.paragraphs[0].runs[0].color, 0xffffc852);
     assert_eq!(number.paragraphs[0].runs[0].font_face, "Impact");
     assert_eq!(number.paragraphs[0].runs[0].size, 24.9);
     assert_eq!([image.width, image.height], [83.0, 83.0]);

@@ -33,7 +33,7 @@ pub fn parts() -> TestResult<OwnedParts> {
         (
             "colors",
             "文字填色：渐变输入与纯色参照",
-            pptx_colors::parts(),
+            pptx_colors::showcase_parts(),
         ),
         (
             "typography",
