@@ -15,13 +15,14 @@ import java.io.FileOutputStream;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 public final class OfficeInstrumentation extends Instrumentation {
     private PreviewTestActivity activity;
     private final StringBuilder results = new StringBuilder();
     private boolean layoutOnly, limitsOnly, imagesOnly, xlsxOnly, demoOnly, pptxOnly, pathsOnly, tablesOnly, backgroundsOnly;
-    private boolean demoSamplesOnly;
+    private boolean demoSamplesOnly, sheetLayoutOnly;
 
     @Override public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
@@ -31,6 +32,7 @@ public final class OfficeInstrumentation extends Instrumentation {
         xlsxOnly = arguments != null && "xlsx".equals(arguments.getString("suite"));
         demoOnly = arguments != null && "demo-xlsx".equals(arguments.getString("suite"));
         demoSamplesOnly = arguments != null && "demo-samples".equals(arguments.getString("suite"));
+        sheetLayoutOnly = arguments != null && "sheet-layout".equals(arguments.getString("suite"));
         pptxOnly = arguments != null && "pptx".equals(arguments.getString("suite"));
         pathsOnly = arguments != null && "paths".equals(arguments.getString("suite"));
         tablesOnly = arguments != null && "tables".equals(arguments.getString("suite"));
@@ -40,6 +42,27 @@ public final class OfficeInstrumentation extends Instrumentation {
     @Override public void onStart() {
         Bundle output = new Bundle();
         try {
+            if (sheetLayoutOnly) {
+                results.append(SheetLayoutChecks.run());
+                results.append(SheetLayoutBenchmark.run("SheetLayout", sheet -> SheetLayoutBenchmark.prepareLayout(sheet,
+                    SheetRenderer.HEADER_WIDTH, SheetRenderer.HEADER_HEIGHT)));
+                runOnMainChecked(() -> results.append(SheetRenderingChecks.run(getTargetContext())));
+                SheetRenderer renderer = new SheetRenderer();
+                java.util.List<SpreadsheetDocument.CellStyle> styles = java.util.Collections.singletonList(new SpreadsheetDocument.CellStyle());
+                AtomicLong elapsed = new AtomicLong();
+                results.append(SheetLayoutBenchmark.run("SheetRenderer.setSheet on main thread", sheet -> {
+                    runOnMainSync(() -> {
+                        long start = System.nanoTime();
+                        renderer.setSheet(sheet, styles);
+                        elapsed.set(System.nanoTime() - start);
+                    });
+                    return elapsed.get();
+                }));
+                runOnMainSync(renderer::clear);
+                output.putString("stream", "\n" + results + "ALL SHEET LAYOUT CHECKS PASSED\n");
+                finish(Activity.RESULT_OK, output);
+                return;
+            }
             if (demoSamplesOnly) {
                 results.append(DemoSampleChecks.run(this));
                 output.putString("stream", "\n" + results + "ALL DEMO SAMPLE CHECKS PASSED\n");
@@ -99,6 +122,7 @@ public final class OfficeInstrumentation extends Instrumentation {
                 return;
             }
             if (!layoutOnly && !imagesOnly) {
+                results.append(SheetLayoutChecks.run());
                 runOnMainChecked(() -> results.append(SheetRenderingChecks.run(getTargetContext())));
                 results.append(SpreadsheetChecks.run(this, activity));
             }

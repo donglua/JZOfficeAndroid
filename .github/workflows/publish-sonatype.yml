@@ -92,6 +92,18 @@ jobs:
           java -cp "$classes" cn.jingzhuan.lib.office.OfficeCacheChecks
           java -cp "$classes" RemoteDownloaderChecks
 
+      - name: Run sheet layout checks
+        shell: bash
+        run: |
+          classes="$RUNNER_TEMP/sheet-layout-checks"
+          mkdir -p "$classes"
+          javac --release 11 -Xlint:all -Werror -d "$classes" \
+            viewer/src/main/java/cn/jingzhuan/lib/office/OfficeDocument.java \
+            viewer/src/main/java/cn/jingzhuan/lib/office/SpreadsheetDocument.java \
+            viewer/src/main/java/cn/jingzhuan/lib/office/SheetLayout.java \
+            viewer/src/androidTest/java/cn/jingzhuan/lib/office/SheetLayoutChecks.java
+          java -cp "$classes" cn.jingzhuan.lib.office.SheetLayoutChecks
+
       - name: Build and publish both signed libraries to Maven Central
         env:
           PUBLISHED_VERSION: ${{ steps.version.outputs.version }}

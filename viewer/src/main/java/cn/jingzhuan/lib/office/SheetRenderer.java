@@ -9,7 +9,6 @@ import android.text.StaticLayout;
 import android.text.TextDirectionHeuristics;
 import android.text.TextPaint;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -25,9 +24,8 @@ final class SheetRenderer {
     float width, height;
     private SpreadsheetDocument.Sheet sheet;
     private List<SpreadsheetDocument.CellStyle> styles = Collections.emptyList();
-    private Axis rows, columns;
-    private int[] rowStarts;
-    private boolean[] mergedCells;
+    private SheetLayout layout;
+    private SheetLayout.Axis rows, columns;
     private final List<Merge> merges = new ArrayList<>();
     private final List<Merge> visibleMerges = new ArrayList<>();
     private final LinkedHashMap<SpreadsheetDocument.Cell, StaticLayout> layouts = new LinkedHashMap<>(32, .75f, true);
@@ -44,37 +42,20 @@ final class SheetRenderer {
 
     void clear() {
         sheet = null; styles = Collections.emptyList(); rows = columns = null;
-        rowStarts = null; mergedCells = null; width = height = 0;
+        layout = null; width = height = 0;
         merges.clear(); visibleMerges.clear(); layouts.clear(); layoutCost = 0;
     }
 
     void setSheet(SpreadsheetDocument.Sheet selected, List<SpreadsheetDocument.CellStyle> cellStyles) {
         clear();
         sheet = selected; styles = cellStyles;
-        rows = new Axis(sheet.rowHeights, HEADER_HEIGHT);
-        columns = new Axis(sheet.columnWidths, HEADER_WIDTH);
-        width = columns.offsets[columns.offsets.length - 1];
-        height = rows.offsets[rows.offsets.length - 1];
-        rowStarts = new int[sheet.rowHeights.length + 1];
-        int next = 0;
-        for (int row = 0; row < sheet.rowHeights.length; row++) {
-            rowStarts[row] = next;
-            while (next < sheet.cells.size() && sheet.cells.get(next).row == row) next++;
-        }
-        rowStarts[sheet.rowHeights.length] = next;
-        mergedCells = new boolean[sheet.cells.size()];
-        for (SpreadsheetDocument.CellRange range : sheet.merges) {
+        layout = new SheetLayout(sheet, HEADER_WIDTH, HEADER_HEIGHT);
+        rows = layout.rows; columns = layout.columns;
+        width = layout.width; height = layout.height;
+        for (SheetLayout.Merge source : layout.merges) {
             Merge merge = new Merge();
-            merge.bounds.set(columns.offsets[range.startColumn], rows.offsets[range.startRow],
-                columns.offsets[range.endColumn + 1], rows.offsets[range.endRow + 1]);
-            for (int row = range.startRow; row <= range.endRow; row++) {
-                for (int i = firstCell(row, range.startColumn); i < rowStarts[row + 1]; i++) {
-                    SpreadsheetDocument.Cell cell = sheet.cells.get(i);
-                    if (cell.column > range.endColumn) break;
-                    mergedCells[i] = true;
-                    if (row == range.startRow && cell.column == range.startColumn) merge.anchor = cell;
-                }
-            }
+            merge.bounds.set(source.left, source.top, source.right, source.bottom);
+            merge.anchor = source.anchor;
             merges.add(merge);
         }
     }
@@ -117,26 +98,16 @@ final class SheetRenderer {
         for (int r = firstRow; r < rows.visible.length; r++) {
             int row = rows.visible[r];
             if (rows.offsets[row] >= body.bottom) break;
-            for (int i = firstCell(row, column); i < rowStarts[row + 1]; i++) {
+            for (int i = layout.firstCell(row, column); i < layout.rowStarts[row + 1]; i++) {
                 SpreadsheetDocument.Cell cell = sheet.cells.get(i);
                 if (columns.offsets[cell.column] >= body.right) break;
-                if (mergedCells[i] || sheet.columnWidths[cell.column] == 0) continue;
+                if (layout.mergedCells[i] || sheet.columnWidths[cell.column] == 0) continue;
                 cellBounds.set(columns.offsets[cell.column], rows.offsets[row],
                     columns.offsets[cell.column + 1], rows.offsets[row + 1]);
                 if (bordersOnly) drawBorders(canvas, cellBounds, style(cell));
                 else drawCell(canvas, cell, cellBounds);
             }
         }
-    }
-
-    private int firstCell(int row, int column) {
-        int low = rowStarts[row], high = rowStarts[row + 1];
-        while (low < high) {
-            int middle = (low + high) >>> 1;
-            if (sheet.cells.get(middle).column < column) low = middle + 1;
-            else high = middle;
-        }
-        return low;
     }
 
     private void drawGrid(Canvas canvas, int firstRow, int firstColumn) {
@@ -284,31 +255,5 @@ final class SheetRenderer {
     private static final class Merge {
         final RectF bounds = new RectF();
         SpreadsheetDocument.Cell anchor;
-    }
-
-    private static final class Axis {
-        final float[] offsets;
-        final int[] visible;
-
-        Axis(float[] sizes, float gutter) {
-            offsets = new float[sizes.length + 1]; offsets[0] = gutter;
-            int[] indices = new int[sizes.length];
-            int count = 0;
-            for (int i = 0; i < sizes.length; i++) {
-                offsets[i + 1] = offsets[i] + sizes[i];
-                if (sizes[i] > 0) indices[count++] = i;
-            }
-            visible = Arrays.copyOf(indices, count);
-        }
-
-        int first(float position) {
-            int low = 0, high = visible.length;
-            while (low < high) {
-                int middle = (low + high) >>> 1;
-                if (offsets[visible[middle] + 1] <= position) low = middle + 1;
-                else high = middle;
-            }
-            return low;
-        }
     }
 }

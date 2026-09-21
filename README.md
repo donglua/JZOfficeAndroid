@@ -427,6 +427,30 @@ XLSX 专项使用 `-e suite xlsx`，以 `ALL XLSX CHECKS PASSED` 为通过标志
 adb shell am instrument -w -e suite xlsx cn.jingzhuan.lib.office.test/cn.jingzhuan.lib.office.OfficeInstrumentation
 ```
 
+表格的行列偏移、稀疏单元格索引和合并区域预计算位于不依赖 Android 的 `SheetLayout`。可直接在 JVM 上运行回归检查和基准，无需构建原生库：
+
+```sh
+mkdir -p viewer/build/sheet-layout-checks
+javac --release 11 -Xlint:all -Werror -d viewer/build/sheet-layout-checks \
+    viewer/src/main/java/cn/jingzhuan/lib/office/OfficeDocument.java \
+    viewer/src/main/java/cn/jingzhuan/lib/office/SpreadsheetDocument.java \
+    viewer/src/main/java/cn/jingzhuan/lib/office/SheetLayout.java \
+    viewer/src/androidTest/java/cn/jingzhuan/lib/office/SheetLayoutChecks.java \
+    viewer/src/androidTest/java/cn/jingzhuan/lib/office/SheetLayoutBenchmark.java
+java -cp viewer/build/sheet-layout-checks cn.jingzhuan.lib.office.SheetLayoutChecks
+java -cp viewer/build/sheet-layout-checks cn.jingzhuan.lib.office.SheetLayoutBenchmark
+```
+
+基准覆盖 1 万行、256 列、5 万单元格的单表，以及两张各 2.5 万单元格的交替准备；分别测量无合并区域和大量纵向合并。每种情况先记录一次调用，再预热 30 次、采样 100 次，报告中位数和 P95。`first` 是该情况的首次调用，不表示全新进程的冷启动；交替准备只模拟切表中的索引重建，不包含完整切表交互。计时不包含文件读取、Rust 解析、JSON 解码、文字排版或绘制，不设性能通过阈值，桌面 JVM 结果不能代表 Android 耗时。
+
+安装测试 APK 后，`sheet-layout` 专项可在设备上运行相同检查、已有表格像素回归，以及主线程 `SheetRenderer.setSheet()` 基准：
+
+```sh
+adb shell am instrument -w -e suite sheet-layout cn.jingzhuan.lib.office.test/cn.jingzhuan.lib.office.OfficeInstrumentation
+```
+
+以 `ALL SHEET LAYOUT CHECKS PASSED` 为通过标志。本次拆分保留原有调用时机和算法，尚未引入后台预计算、跨工作表缓存或 Rust 迁移。
+
 Demo 标签检查需要先安装 Debug Demo 和测试 APK，使用内置工作簿。该检查通过无障碍点击切换工作表，断言选中状态与页码并保存实际窗口截图；它不替代系统触摸注入检查。
 
 ```sh
