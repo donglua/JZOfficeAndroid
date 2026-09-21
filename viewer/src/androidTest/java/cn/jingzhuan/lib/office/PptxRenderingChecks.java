@@ -32,7 +32,7 @@ final class PptxRenderingChecks {
         log.append(PptxTextChecks.run(instrumentation));
         try (OfficePackage source = OfficePackage.open(context, uri)) {
             String json = NativeCore.parse(source.file.getAbsolutePath());
-            OfficeDocument document = DocumentDecoder.decode(json);
+            OfficeDocument document = source.document;
             check(document.kind == OfficeDocument.Kind.PPTX && document.pages.size() == 2, "Compatibility deck has two slides");
             for (OfficeDocument.Page page : document.pages) for (OfficeDocument.Element element : page.elements) {
                 if (element.image != null && !images.containsKey(element.image)) {

@@ -93,7 +93,10 @@ public final class OfficeInstrumentation extends Instrumentation {
                 finish(Activity.RESULT_OK, output);
                 return;
             }
-            if (!layoutOnly && !imagesOnly && !xlsxOnly && !pptxOnly) results.append(PackageLimitChecks.run(getTargetContext()));
+            if (!layoutOnly && !imagesOnly && !xlsxOnly && !pptxOnly) {
+                results.append(PackageOpeningChecks.run(getTargetContext()));
+                results.append(PackageLimitChecks.run(getTargetContext()));
+            }
             if (limitsOnly) {
                 output.putString("stream", "\n" + results + "ALL LIMIT CHECKS PASSED\n");
                 finish(Activity.RESULT_OK, output);

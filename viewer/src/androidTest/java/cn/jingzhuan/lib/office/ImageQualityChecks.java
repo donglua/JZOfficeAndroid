@@ -8,6 +8,7 @@ import android.os.SystemClock;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -145,6 +146,15 @@ final class ImageQualityChecks {
         File file = File.createTempFile("image-quality-", ".zip", directory);
         boolean complete = false;
         try (ZipOutputStream zip = new ZipOutputStream(new FileOutputStream(file))) {
+            zip.putNextEntry(new ZipEntry("_rels/.rels"));
+            zip.write(("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+                + "<Relationship Id=\"rDoc\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\""
+                + " Target=\"word/document.xml\"/></Relationships>").getBytes(StandardCharsets.UTF_8));
+            zip.closeEntry();
+            zip.putNextEntry(new ZipEntry("word/document.xml"));
+            zip.write(("<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">"
+                + "<w:body><w:p><w:r><w:t>Image quality fixture</w:t></w:r></w:p></w:body></w:document>").getBytes(StandardCharsets.UTF_8));
+            zip.closeEntry();
             image(zip, BIG_1, BIG, Color.RED);
             image(zip, BIG_2, BIG, Color.GREEN);
             image(zip, BIG_3, BIG, Color.BLUE);

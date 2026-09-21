@@ -107,7 +107,7 @@ public final class OfficePreviewView extends View {
             OfficePackage opened = null;
             try {
                 opened = OfficePackage.open(app, uri);
-                OfficeDocument loaded = DocumentDecoder.decode(NativeCore.parse(opened.file.getAbsolutePath()));
+                OfficeDocument loaded = opened.document;
                 OfficePackage.checkCancelled();
                 final OfficePackage source = opened;
                 main.post(() -> {

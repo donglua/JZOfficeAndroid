@@ -17,7 +17,7 @@ final class PackageLimitChecks {
         verify(context, "pptx", 96, 0, null, log);
         verify(context, "pptx", 192, 1, null, log);
         verify(context, "pptx", 129, 0, "128 MiB input limit", log);
-        verify(context, "pptx", 257, 1, "256 MiB limit", log);
+        verify(context, "pptx", 257, 1, "Expanded package exceeds 256 MiB", log);
         File[] cached = new File(context.getCacheDir(), "office-preview").listFiles();
         if (cached == null || cached.length != 0) throw new AssertionError("Package limit checks leaked temporary files");
         return log.append("PASS Package limit temporary files removed\n").toString();
@@ -51,7 +51,7 @@ final class PackageLimitChecks {
             }
             try (OfficePackage pkg = OfficePackage.open(context, Uri.fromFile(file))) {
                 if (expectedError != null) throw new AssertionError("Oversized package accepted: " + paddingMiB);
-                OfficeDocument doc = DocumentDecoder.decode(NativeCore.parse(pkg.file.getAbsolutePath()));
+                OfficeDocument doc = pkg.document;
                 boolean hasContent = "pptx".equals(format)
                     ? doc.kind == OfficeDocument.Kind.PPTX && !doc.pages.isEmpty() && !doc.pages.get(0).elements.isEmpty()
                     : doc.kind == OfficeDocument.Kind.DOCX && !doc.blocks.isEmpty();

@@ -43,7 +43,7 @@ final class RenderingChecks {
 
     private static OfficeDocument decode(Context context, File file, Map<String, Bitmap> images) throws Exception {
         try (OfficePackage pkg = OfficePackage.open(context, Uri.fromFile(file))) {
-            OfficeDocument doc = DocumentDecoder.decode(NativeCore.parse(pkg.file.getAbsolutePath()));
+            OfficeDocument doc = pkg.document;
             List<OfficeDocument.Element> elements = new ArrayList<>(doc.blocks);
             for (OfficeDocument.Page page : doc.pages) elements.addAll(page.elements);
             for (OfficeDocument.Element element : elements) {

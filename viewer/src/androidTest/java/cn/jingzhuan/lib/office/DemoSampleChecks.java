@@ -33,7 +33,7 @@ final class DemoSampleChecks {
             Uri uri = Uri.parse("content://" + instrumentation.getTargetContext().getPackageName() + ".fixtures/samples/" + name);
             OfficeDocument document;
             try (OfficePackage source = OfficePackage.open(instrumentation.getTargetContext(), uri)) {
-                document = DocumentDecoder.decode(NativeCore.parse(source.file.getAbsolutePath()));
+                document = source.document;
             }
             if (checked > 0) click(instrumentation, "Open sample");
             await(instrumentation, "Samples");

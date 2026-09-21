@@ -19,7 +19,7 @@ final class PptxTextChecks {
         PptxWrappingChecks.run(instrumentation);
         Uri uri = Uri.parse("content://" + context.getPackageName() + ".fixtures/" + FIXTURE);
         try (OfficePackage source = OfficePackage.open(context, uri)) {
-            OfficeDocument document = DocumentDecoder.decode(NativeCore.parse(source.file.getAbsolutePath()));
+            OfficeDocument document = source.document;
             instrumentation.runOnMainChecked(() -> {
                 validate(document);
                 for (int page = 0; page < 2; page++) for (int width : new int[] {960, 1920}) {

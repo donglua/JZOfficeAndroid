@@ -26,7 +26,7 @@ final class PptxBackgroundChecks {
         Context context = instrumentation.getTargetContext();
         Uri uri = Uri.parse("content://" + context.getPackageName() + ".fixtures/" + FIXTURE);
         try (OfficePackage source = OfficePackage.open(context, uri)) {
-            OfficeDocument document = DocumentDecoder.decode(NativeCore.parse(source.file.getAbsolutePath()));
+            OfficeDocument document = source.document;
             check(document.kind == OfficeDocument.Kind.PPTX && document.pages.size() == 3,
                 "Background sample contains inherited, solid and transformed fills");
             OfficeDocument.Element image = document.pages.get(0).elements.get(1);

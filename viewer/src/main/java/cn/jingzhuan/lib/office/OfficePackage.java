@@ -11,7 +11,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InterruptedIOException;
-import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.zip.ZipEntry;
@@ -27,12 +26,15 @@ final class OfficePackage implements Closeable {
         Image(Bitmap bitmap, long nextPixels) { this.bitmap = bitmap; this.nextPixels = nextPixels; }
     }
     final File file;
-    final ZipFile zip;
+    final OfficeDocument document;
+    private final ZipFile zip;
     private final OfficeCache.Entry cache;
     private long readBytes;
     private final Map<String, Long> readSizes = new HashMap<>();
 
-    private OfficePackage(OfficeCache.Entry cache, ZipFile zip) { this.cache = cache; this.file = cache.getFile(); this.zip = zip; }
+    private OfficePackage(OfficeCache.Entry cache, ZipFile zip, OfficeDocument document) {
+        this.cache = cache; this.file = cache.getFile(); this.zip = zip; this.document = document;
+    }
 
     static OfficePackage open(Context context, Uri uri) throws IOException {
         String scheme = uri.getScheme();
@@ -40,7 +42,9 @@ final class OfficePackage implements Closeable {
         OfficeCache.Entry cache = OfficeCache.create(context.getCacheDir());
         File file = cache.getFile();
         ZipFile zip = null;
+        boolean complete = false;
         try {
+            checkCancelled();
             try (InputStream input = "file".equals(scheme) ? OfficeCache.openInput(new File(uri.getPath())) : context.getContentResolver().openInputStream(uri);
                  FileOutputStream output = new FileOutputStream(file)) {
                 if (input == null) throw new IOException("Provider returned no stream");
@@ -53,23 +57,19 @@ final class OfficePackage implements Closeable {
                     output.write(buffer, 0, count);
                 }
             }
+            checkCancelled();
+            OfficeDocument document = DocumentDecoder.decode(NativeCore.parse(file.getAbsolutePath()));
+            checkCancelled();
             zip = new ZipFile(file);
-            long expanded = 0;
-            int count = 0;
-            Enumeration<? extends ZipEntry> entries = zip.entries();
-            java.util.HashSet<String> names = new java.util.HashSet<>();
-            while (entries.hasMoreElements()) {
-                checkCancelled();
-                ZipEntry entry = entries.nextElement();
-                if (++count > 4096 || !names.add(entry.getName())) throw new IOException("Invalid or oversized package");
-                long size = entry.getSize();
-                if (size < 0 || size > MAX_EXPANDED || (expanded += size) > MAX_EXPANDED) throw new IOException("Expanded document exceeds 256 MiB limit");
+            checkCancelled();
+            OfficePackage opened = new OfficePackage(cache, zip, document);
+            complete = true;
+            return opened;
+        } finally {
+            if (!complete) {
+                try { if (zip != null) zip.close(); }
+                finally { cache.close(); }
             }
-            return new OfficePackage(cache, zip);
-        } catch (IOException | RuntimeException e) {
-            if (zip != null) try { zip.close(); } catch (IOException ignored) { }
-            cache.close();
-            throw e;
         }
     }
 

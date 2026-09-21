@@ -23,7 +23,7 @@ final class PptxColorChecks {
         Uri uri = Uri.parse("content://" + context.getPackageName() + ".fixtures/" + FIXTURE);
         StringBuilder results = new StringBuilder();
         try (OfficePackage source = OfficePackage.open(context, uri)) {
-            OfficeDocument document = DocumentDecoder.decode(NativeCore.parse(source.file.getAbsolutePath()));
+            OfficeDocument document = source.document;
             check(document.kind == OfficeDocument.Kind.PPTX && document.pages.size() == 2,
                 "Color fixture contains gradient and solid reference slides");
             for (OfficeDocument.Page page : document.pages) {

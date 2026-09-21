@@ -17,7 +17,7 @@ final class PptxWrappingChecks {
         Context context = instrumentation.getTargetContext();
         Uri uri = Uri.parse("content://" + context.getPackageName() + ".fixtures/" + FIXTURE);
         try (OfficePackage source = OfficePackage.open(context, uri)) {
-            OfficeDocument document = DocumentDecoder.decode(NativeCore.parse(source.file.getAbsolutePath()));
+            OfficeDocument document = source.document;
             check(document.kind == OfficeDocument.Kind.PPTX && document.pages.size() == 9,
                 "Wrapping sample contains three break modes for each alignment");
             instrumentation.runOnMainChecked(() -> capture(context, document));

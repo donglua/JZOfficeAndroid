@@ -21,7 +21,7 @@ final class PptxChartChecks {
         Context context = instrumentation.getTargetContext();
         Uri uri = Uri.parse("content://" + context.getPackageName() + ".fixtures/" + FIXTURE);
         try (OfficePackage source = OfficePackage.open(context, uri)) {
-            OfficeDocument document = DocumentDecoder.decode(NativeCore.parse(source.file.getAbsolutePath()));
+            OfficeDocument document = source.document;
             check(document.pages.size() == 2, "Chart fixture contains category and date slides");
             instrumentation.runOnMainChecked(() -> {
                 for (int page = 0; page < 2; page++) {
