@@ -5,7 +5,7 @@ use crate::{Error, Result};
 
 impl Parser<'_> {
     pub(super) fn paragraph(&mut self, node: &Node, in_cell: bool) -> Result<Vec<Element>> {
-        let (paragraph, font) = self.styles.paragraph(node, &mut self.document);
+        let (paragraph, font) = self.styles.paragraph(node, &mut self.document)?;
         let mut flow = Flow {
             current: paragraph.clone(),
             template: paragraph,
@@ -21,8 +21,8 @@ impl Parser<'_> {
         self.inline(node, &font, &mut flow)?;
         if flow.elements.is_empty() && flow.current.runs.is_empty() {
             let mut mark = font;
-            format::font(&mut mark, node.child("pPr").and_then(|n| n.child("rPr")));
-            flow.text("", &mark);
+            format::font(&mut mark, node.child("pPr").and_then(|n| n.child("rPr")))?;
+            flow.text(mark.run("", &mut self.document));
         }
         if !flow.current.runs.is_empty() || flow.elements.is_empty() {
             flow.flush()?;
@@ -30,7 +30,7 @@ impl Parser<'_> {
         Ok(flow.elements)
     }
 
-    fn inline(&mut self, parent: &Node, font: &Run, flow: &mut Flow) -> Result<()> {
+    fn inline(&mut self, parent: &Node, font: &format::Font, flow: &mut Flow) -> Result<()> {
         for node in &parent.children {
             match node.name.as_str() {
                 "r" => {
@@ -40,22 +40,22 @@ impl Parser<'_> {
                         .and_then(|n| n.child("rStyle"))
                         .map_or(self.styles.default_character.as_str(), |n| n.attr("val"));
                     for style in self.styles.chain(id, &mut self.document).iter().rev() {
-                        format::font(&mut font, style.child("rPr"));
+                        format::font(&mut font, style.child("rPr"))?;
                     }
-                    format::font(&mut font, properties);
+                    format::font(&mut font, properties)?;
                     self.inline(node, &font, flow)?;
                 }
-                "t" => flow.text(&node.text, font),
-                "tab" | "ptab" => flow.text("\t", font),
+                "t" => flow.text(font.run(&node.text, &mut self.document)),
+                "tab" | "ptab" => flow.text(font.run("\t", &mut self.document)),
                 "br" | "cr" => {
                     if matches!(node.attr("type"), "page" | "column") {
                         self.document
                             .warn("Page and column breaks are rendered as line breaks.");
                     }
-                    flow.text("\n", font);
+                    flow.text(font.run("\n", &mut self.document));
                 }
-                "noBreakHyphen" => flow.text("\u{2011}", font),
-                "softHyphen" => flow.text("\u{ad}", font),
+                "noBreakHyphen" => flow.text(font.run("\u{2011}", &mut self.document)),
+                "softHyphen" => flow.text(font.run("\u{ad}", &mut self.document)),
                 "drawing" => {
                     if flow.in_cell {
                         self.document.warn("Images inside table cells are omitted.");
@@ -96,11 +96,8 @@ struct Flow {
 }
 
 impl Flow {
-    fn text(&mut self, text: &str, font: &Run) {
-        self.current.runs.push(Run {
-            text: text.to_owned(),
-            ..font.clone()
-        });
+    fn text(&mut self, run: Run) {
+        self.current.runs.push(run);
     }
 
     fn image(&mut self, image: Element) -> Result<()> {
