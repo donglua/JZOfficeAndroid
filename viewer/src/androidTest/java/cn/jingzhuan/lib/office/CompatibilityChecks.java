@@ -22,7 +22,33 @@ final class CompatibilityChecks {
 
     static String run(OfficeInstrumentation instrumentation, PreviewTestActivity activity) throws Exception {
         palette(instrumentation, activity);
-        return "PASS custom XLSX palette through JNI, font/fill/border colors, Canvas pixels and URI preview\n";
+        tint(instrumentation, activity);
+        return "PASS custom XLSX palette through JNI, font/fill/border colors, Canvas pixels and URI preview\n"
+            + "PASS XLSX positive/negative tint through JNI, Canvas colors and URI preview\n";
+    }
+
+    private static void tint(OfficeInstrumentation instrumentation, PreviewTestActivity activity) throws Exception {
+        Context context = instrumentation.getTargetContext();
+        String styles = "<styleSheet><fonts><font><sz val=\"20\"/><color rgb=\"FF0000\" tint=\"-0.5\"/></font></fonts>"
+            + "<fills><fill><patternFill patternType=\"solid\"><fgColor rgb=\"0000FF\" tint=\"0.5\"/></patternFill></fill></fills>"
+            + "<cellXfs><xf fontId=\"0\" fillId=\"0\"/></cellXfs></styleSheet>";
+        File source = spreadsheet(context, "tint", styles, "<row ht=\"60\"><c t=\"inlineStr\"><is><t>Tint 明暗色</t></is></c></row>");
+        try (OfficePackage pkg = OfficePackage.open(context, Uri.fromFile(source))) {
+            SpreadsheetDocument.CellStyle style = pkg.document.cellStyles.get(0);
+            check(style.color == 0xff800000 && style.fill == 0xff8080ff, "Tint reaches Java text and fill colors");
+            check(pkg.document.warnings.isEmpty(), "Supported tint has no warning");
+            instrumentation.runOnMainChecked(() -> {
+                SheetRenderer renderer = new SheetRenderer();
+                renderer.setSheet(pkg.document.sheets.get(0), pkg.document.cellStyles);
+                Bitmap bitmap = Bitmap.createBitmap(300, 160, Bitmap.Config.ARGB_8888);
+                try {
+                    renderer.draw(new Canvas(bitmap), new RectF(0, 0, 300, 160));
+                    color(bitmap, 80, 30, 0xff8080ff, "Tinted fill pixel");
+                    check(hasColor(bitmap, 0xff800000), "Tinted font paints its color");
+                } finally { bitmap.recycle(); renderer.clear(); }
+            });
+            show(instrumentation, activity, source, "compat-tint-screen.png");
+        } finally { check(source.delete(), "Delete tint fixture"); }
     }
 
     private static void palette(OfficeInstrumentation instrumentation, PreviewTestActivity activity) throws Exception {

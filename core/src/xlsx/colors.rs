@@ -85,17 +85,42 @@ impl Colors {
         let tint = node.attr("tint");
         if !tint.is_empty() {
             let tint = tint
-                .parse::<f32>()
+                .parse::<f64>()
                 .map_err(|_| Error::Invalid("Invalid XLSX color tint"))?;
             if !tint.is_finite() || !(-1.0..=1.0).contains(&tint) {
                 return Err(Error::Invalid("Invalid XLSX color tint"));
             }
             if tint != 0.0 {
-                document.warn("Color tints are not supported; base colors are displayed");
+                return Ok(tinted(value, tint));
             }
         }
         Ok(value)
     }
+}
+
+fn tinted(value: u32, tint: f64) -> u32 {
+    let mut channels = [(value >> 16) & 255, (value >> 8) & 255, value & 255]
+        .map(|channel| f64::from(channel) / 255.0);
+    let min = channels.into_iter().fold(1.0, f64::min);
+    let max = channels.into_iter().fold(0.0, f64::max);
+    let lightness = (min + max) / 2.0;
+    let adjusted = if tint < 0.0 {
+        lightness * (1.0 + tint)
+    } else {
+        lightness * (1.0 - tint) + tint
+    };
+    if max == min {
+        channels = [adjusted; 3];
+    } else {
+        let saturation = (max - min) / (1.0 - (max + min - 1.0).abs());
+        let chroma = (1.0 - (2.0 * adjusted - 1.0).abs()) * saturation;
+        for channel in &mut channels {
+            *channel = (*channel - min) / (max - min) * chroma + adjusted - chroma / 2.0;
+        }
+    }
+    let [red, green, blue] =
+        channels.map(|channel| (channel.clamp(0.0, 1.0) * 255.0).round() as u32);
+    (value & 0xff000000) | (red << 16) | (green << 8) | blue
 }
 
 fn rgb(value: &str) -> Result<u32> {

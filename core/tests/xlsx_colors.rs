@@ -116,3 +116,91 @@ fn malformed_custom_palette_colors_are_rejected() -> TestResult {
     }
     Ok(())
 }
+
+#[test]
+fn tint_changes_hls_lightness_for_rgb_colors() -> TestResult {
+    for (rgb, tint, expected) in [
+        ("FF0000", "0.5", 0xffff8080_u32),
+        ("FF0000", "-0.5", 0xff800000),
+        ("0000FF", "0.5", 0xff8080ff),
+        ("C8C8C8", "-0.5", 0xff646464),
+        ("000000", "0.5", 0xff808080),
+        ("FFFFFF", "-0.5", 0xff808080),
+        ("123456", "0", 0xff123456),
+        ("123456", "1", 0xffffffff),
+        ("123456", "-1", 0xff000000),
+        ("000000", "-0.5", 0xff000000),
+        ("FFFFFF", "0.5", 0xffffffff),
+    ] {
+        let styles = xlsx::STYLES.replace(
+            "rgb=\"FFFFFFFF\"",
+            &format!("rgb=\"{rgb}\" tint=\"{tint}\""),
+        );
+
+        let document = parse(&styles)?;
+
+        assert_eq!(document.cell_styles[1].color, expected, "{rgb} tint={tint}");
+        assert!(!document.warnings.iter().any(|w| w.contains("tint")));
+    }
+    Ok(())
+}
+
+#[test]
+fn tint_applies_after_theme_and_indexed_color_resolution() -> TestResult {
+    let colors = "<colors><indexedColors><rgbColor rgb=\"000000FF\"/></indexedColors></colors>";
+    let styles = indexed_styles(0, 0, 0, colors)
+        .replace("indexed=\"0\"", "indexed=\"0\" tint=\"0.5\"")
+        .replace("rgb=\"FF202124\"", "theme=\"0\" tint=\"-0.5\"");
+
+    let document = parse(&styles)?;
+
+    let style = &document.cell_styles[1];
+    assert_eq!(style.color, 0xff8080ff);
+    assert_eq!(style.fill, 0xff8080ff);
+    assert_eq!(style.borders, [Some(0xff8080ff); 4]);
+    assert_eq!(document.cell_styles[0].color, 0xff808080);
+    assert!(document
+        .warnings
+        .iter()
+        .any(|w| w.contains("theme is missing")));
+    assert!(!document.warnings.iter().any(|w| w.contains("tint")));
+    Ok(())
+}
+
+#[test]
+fn positive_tint_preserves_hue_and_saturation_instead_of_blending_rgb() -> TestResult {
+    let styles = xlsx::STYLES.replace("rgb=\"FFFFFFFF\"", "rgb=\"336699\" tint=\"0.5\"");
+
+    let document = parse(&styles)?;
+
+    let actual = document.cell_styles[1].color;
+    // HLS lightness 0.4 -> 0.7 yields RGB (140.25, 178.5, 216.75).
+    for (shift, expected) in [(16, 140_u32), (8, 179), (0, 217)] {
+        assert!(((actual >> shift) & 255).abs_diff(expected) <= 1);
+    }
+    assert_eq!(actual >> 24, 255);
+    Ok(())
+}
+
+#[test]
+fn invalid_tints_remain_rejected() -> TestResult {
+    for tint in ["NaN", "inf", "-inf", "1.01", "-1.01", "oops"] {
+        let mut parts = xlsx::parts();
+        replace(
+            &mut parts,
+            "xl/styles.xml",
+            &xlsx::STYLES.replace(
+                "rgb=\"FFFFFFFF\"",
+                &format!("rgb=\"FFFFFFFF\" tint=\"{tint}\""),
+            ),
+        );
+
+        let result = parse_reader(Cursor::new(archive(&parts)?));
+
+        assert!(matches!(
+            result,
+            Err(Error::Invalid("Invalid XLSX color tint"))
+        ));
+    }
+    Ok(())
+}
