@@ -41,6 +41,8 @@ final class PptxTextChecks {
             instrumentation.runOnMainChecked(() -> {
                 capture(context, document, 9, 1920);
                 OfficeRenderer renderer = new OfficeRenderer(); renderer.layout(document);
+                OfficeRenderer.Page chapter = renderer.pages.get(9);
+                renderer.preparePages(chapter.y, chapter.y + chapter.height);
                 java.util.List<OfficeRenderer.Element> labels = new java.util.ArrayList<>();
                 for (OfficeRenderer.Element element : renderer.pages.get(9).elements) {
                     if (element.texts.isEmpty()) continue;

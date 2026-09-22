@@ -22,7 +22,7 @@ public final class OfficeInstrumentation extends Instrumentation {
     private PreviewTestActivity activity;
     private final StringBuilder results = new StringBuilder();
     private boolean layoutOnly, limitsOnly, imagesOnly, xlsxOnly, demoOnly, pptxOnly, pathsOnly, tablesOnly, backgroundsOnly;
-    private boolean demoSamplesOnly, sheetLayoutOnly, pptxGeometryOnly;
+    private boolean demoSamplesOnly, sheetLayoutOnly, pptxGeometryOnly, pptxLayoutOnly;
 
     @Override public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
@@ -35,6 +35,7 @@ public final class OfficeInstrumentation extends Instrumentation {
         sheetLayoutOnly = arguments != null && "sheet-layout".equals(arguments.getString("suite"));
         pptxOnly = arguments != null && "pptx".equals(arguments.getString("suite"));
         pptxGeometryOnly = arguments != null && "pptx-geometry".equals(arguments.getString("suite"));
+        pptxLayoutOnly = arguments != null && "pptx-layout".equals(arguments.getString("suite"));
         pathsOnly = arguments != null && "paths".equals(arguments.getString("suite"));
         tablesOnly = arguments != null && "tables".equals(arguments.getString("suite"));
         backgroundsOnly = arguments != null && "backgrounds".equals(arguments.getString("suite"));
@@ -103,7 +104,7 @@ public final class OfficeInstrumentation extends Instrumentation {
                 finish(Activity.RESULT_OK, output);
                 return;
             }
-            if (!layoutOnly && !imagesOnly && !xlsxOnly && !pptxOnly) {
+            if (!layoutOnly && !imagesOnly && !xlsxOnly && !pptxOnly && !pptxLayoutOnly) {
                 results.append(PackageOpeningChecks.run(getTargetContext()));
                 results.append(PackageLimitChecks.run(getTargetContext()));
             }
@@ -122,6 +123,13 @@ public final class OfficeInstrumentation extends Instrumentation {
             activity = (PreviewTestActivity) waitForMonitorWithTimeout(monitor, 10000);
             removeMonitor(monitor);
             check(activity != null, "Test activity starts");
+            if (pptxLayoutOnly || pptxOnly) results.append(PptxLayoutChecks.run(this, activity));
+            if (pptxLayoutOnly) {
+                runOnMainSync(() -> activity.finish());
+                output.putString("stream", "\n" + results + "ALL PPTX LAYOUT CHECKS PASSED\n");
+                finish(Activity.RESULT_OK, output);
+                return;
+            }
             if (pptxOnly) {
                 results.append(PptxCompatibilityChecks.run(this, activity));
                 results.append(PptxPathChecks.run(this));

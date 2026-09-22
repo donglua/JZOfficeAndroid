@@ -30,17 +30,23 @@ final class OfficeRenderer {
     static final class Page {
         float y, width, height;
         int background;
+        boolean ready;
         final List<Element> elements = new ArrayList<>();
     }
 
     final List<Page> pages = new ArrayList<>();
     float width, height;
+    private OfficeDocument document;
+    private int preparedFirst, preparedLast = -1;
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
 
-    void clear() { pages.clear(); width = height = 0; }
+    void clear() {
+        pages.clear(); document = null; width = height = 0;
+        preparedFirst = 0; preparedLast = -1;
+    }
 
     void layout(OfficeDocument document) {
-        clear(); width = Math.max(1, document.width);
+        clear(); this.document = document; width = Math.max(1, document.width);
         if (document.kind == OfficeDocument.Kind.DOCX) {
             Page page = new Page(); page.width = width; page.background = 0xffffffff;
             float y = 32;
@@ -51,19 +57,51 @@ final class OfficeRenderer {
                 position(drawn, true);
                 page.elements.add(drawn); y += drawn.height + 6;
             }
-            page.height = Math.max(300, y + 32); pages.add(page); height = page.height;
+            page.height = Math.max(300, y + 32); page.ready = true; pages.add(page); height = page.height;
         } else {
             for (OfficeDocument.Page source : document.pages) {
                 Page page = new Page(); page.y = height;
                 page.width = source.width; page.height = source.height; page.background = source.background;
-                for (OfficeDocument.Element e : source.elements) {
-                    Element drawn = element(e, e.width, false, document);
-                    page.elements.add(drawn);
-                }
                 pages.add(page); height += page.height + 16;
             }
             height = Math.max(0, height - 16);
+            if (!pages.isEmpty()) preparePages(0, pages.get(0).height);
         }
+    }
+
+    void preparePages(float top, float bottom) {
+        if (document == null || document.kind != OfficeDocument.Kind.PPTX || pages.isEmpty()) return;
+        int first = Math.max(0, pageAt(top) - 1);
+        int last = pageAt(bottom);
+        if (last > 0 && pages.get(last).y > bottom) last--;
+        last = Math.min(pages.size() - 1, last + 1);
+        if (first == preparedFirst && last == preparedLast) return;
+        for (int i = preparedFirst; i <= preparedLast; i++) {
+            if (i >= first && i <= last) continue;
+            Page page = pages.get(i);
+            page.elements.clear(); page.ready = false;
+        }
+        // Slide dimensions remain available for navigation after their layouts are released.
+        for (int i = first; i <= last; i++) {
+            Page page = pages.get(i);
+            if (page.ready) continue;
+            for (OfficeDocument.Element source : document.pages.get(i).elements) {
+                page.elements.add(element(source, source.width, false, document));
+            }
+            page.ready = true;
+        }
+        preparedFirst = first; preparedLast = last;
+    }
+
+    private int pageAt(float y) {
+        int low = 0, high = pages.size() - 1;
+        while (low < high) {
+            int middle = (low + high) >>> 1;
+            Page page = pages.get(middle);
+            if (page.y + page.height < y) low = middle + 1;
+            else high = middle;
+        }
+        return low;
     }
 
     private Element element(OfficeDocument.Element source, float available, boolean flow, OfficeDocument document) {
@@ -152,6 +190,7 @@ final class OfficeRenderer {
     }
 
     Set<String> visibleImages(float left, float top, float right, float bottom, int currentPage) {
+        preparePages(top, bottom);
         Set<String> parts = new LinkedHashSet<>();
         for (int index = -1; index < pages.size(); index++) {
             if (index == currentPage || (index == -1 && (currentPage < 0 || currentPage >= pages.size()))) continue;
@@ -173,6 +212,7 @@ final class OfficeRenderer {
     }
 
     void draw(Canvas canvas, float visibleTop, float visibleBottom, Map<String, Bitmap> images) {
+        preparePages(visibleTop, visibleBottom);
         for (Page page : pages) {
             if (page.y + page.height < visibleTop || page.y > visibleBottom) continue;
             canvas.save(); canvas.translate(0, page.y); canvas.clipRect(0, 0, page.width, page.height);

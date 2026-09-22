@@ -34,6 +34,7 @@ public final class OfficePreviewView extends View {
     public static final class Info {
         public final String format;
         public final int pageCount;
+        /** Snapshot at onLoaded; PPTX overflow checks cover only slides laid out so far. */
         public final List<String> warnings;
         public final List<String> sheetNames;
         private Info(OfficeDocument document) {
