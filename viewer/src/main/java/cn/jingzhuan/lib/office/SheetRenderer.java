@@ -158,21 +158,22 @@ final class SheetRenderer {
         int typeface = style.bold ? (style.italic ? Typeface.BOLD_ITALIC : Typeface.BOLD)
             : (style.italic ? Typeface.ITALIC : Typeface.NORMAL);
         font.setTypeface(Typeface.create(Typeface.DEFAULT, typeface));
+        String text = cell.previewText();
         int layoutWidth = Math.max(1, (int) availableWidth);
-        if (!style.wrap) layoutWidth = Math.max(layoutWidth, (int) Math.ceil(Layout.getDesiredWidth(cell.text, font)));
+        if (!style.wrap) layoutWidth = Math.max(layoutWidth, (int) Math.ceil(Layout.getDesiredWidth(text, font)));
         int alignment = alignment(cell, style);
         Layout.Alignment textAlignment = alignment == 1 ? Layout.Alignment.ALIGN_CENTER
             : alignment == 2 ? Layout.Alignment.ALIGN_OPPOSITE : Layout.Alignment.ALIGN_NORMAL;
         int maxLines = Math.max(1, (int) Math.ceil(availableHeight / Math.max(1, font.getFontSpacing())) + 1);
-        StaticLayout layout = StaticLayout.Builder.obtain(cell.text, 0, cell.text.length(), font, layoutWidth)
+        StaticLayout layout = StaticLayout.Builder.obtain(text, 0, text.length(), font, layoutWidth)
             .setAlignment(textAlignment).setTextDirection(TextDirectionHeuristics.LTR).setIncludePad(false)
             .setMaxLines(maxLines).build();
-        int cost = cell.text.length() + 8 * layout.getLineCount();
+        int cost = layout.getText().length() + 8 * layout.getLineCount();
         if (cost <= MAX_LAYOUT_COST) {
             Iterator<Map.Entry<SpreadsheetDocument.Cell, StaticLayout>> iterator = layouts.entrySet().iterator();
             while (iterator.hasNext() && (layouts.size() >= MAX_CACHED_LAYOUTS || layoutCost + cost > MAX_LAYOUT_COST)) {
                 Map.Entry<SpreadsheetDocument.Cell, StaticLayout> oldest = iterator.next();
-                layoutCost -= oldest.getKey().text.length() + 8 * oldest.getValue().getLineCount();
+                layoutCost -= oldest.getValue().getText().length() + 8 * oldest.getValue().getLineCount();
                 iterator.remove();
             }
             layouts.put(cell, layout); layoutCost += cost;

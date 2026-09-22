@@ -42,6 +42,12 @@ final class DocumentDecoder {
                 SpreadsheetDocument.Sheet sheet = sheet(sheets.getJSONObject(i), document.cellStyles.size());
                 cellCount += sheet.cells.size(); mergeCount += sheet.merges.size();
                 if (cellCount > 50000 || mergeCount > 1000) throw new JSONException("Spreadsheet model exceeds limits");
+                for (SpreadsheetDocument.Cell cell : sheet.cells) {
+                    if (cell.text.length() > SpreadsheetDocument.Cell.MAX_PREVIEW_LENGTH) {
+                        document.warn("Long spreadsheet cell text is truncated in the preview");
+                        break;
+                    }
+                }
                 document.sheets.add(sheet);
             }
             return document;

@@ -15,9 +15,17 @@ final class SpreadsheetDocument {
     }
 
     static final class Cell {
+        static final int MAX_PREVIEW_LENGTH = 4096;
         int row, column, style;
         String text = "";
         boolean numeric;
+
+        String previewText() {
+            if (text.length() <= MAX_PREVIEW_LENGTH) return text;
+            int end = MAX_PREVIEW_LENGTH - 1;
+            if (Character.isHighSurrogate(text.charAt(end - 1)) && Character.isLowSurrogate(text.charAt(end))) end--;
+            return text.substring(0, end) + "\u2026";
+        }
     }
 
     static final class CellRange {

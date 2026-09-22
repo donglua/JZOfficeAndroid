@@ -23,7 +23,7 @@ public final class OfficeInstrumentation extends Instrumentation {
     private final StringBuilder results = new StringBuilder();
     private boolean layoutOnly, limitsOnly, imagesOnly, xlsxOnly, demoOnly, pptxOnly, pathsOnly, tablesOnly, backgroundsOnly;
     private boolean demoSamplesOnly, sheetLayoutOnly, pptxGeometryOnly, pptxLayoutOnly, imageCacheOnly;
-    private boolean compatibilityOnly;
+    private boolean compatibilityOnly, xlsxTextOnly;
 
     @Override public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
@@ -33,6 +33,7 @@ public final class OfficeInstrumentation extends Instrumentation {
         imagesOnly = arguments != null && "images".equals(arguments.getString("suite"));
         imageCacheOnly = arguments != null && "image-cache".equals(arguments.getString("suite"));
         xlsxOnly = arguments != null && "xlsx".equals(arguments.getString("suite"));
+        xlsxTextOnly = arguments != null && "xlsx-text".equals(arguments.getString("suite"));
         demoOnly = arguments != null && "demo-xlsx".equals(arguments.getString("suite"));
         demoSamplesOnly = arguments != null && "demo-samples".equals(arguments.getString("suite"));
         sheetLayoutOnly = arguments != null && "sheet-layout".equals(arguments.getString("suite"));
@@ -107,7 +108,7 @@ public final class OfficeInstrumentation extends Instrumentation {
                 finish(Activity.RESULT_OK, output);
                 return;
             }
-            if (!layoutOnly && !imagesOnly && !imageCacheOnly && !xlsxOnly && !pptxOnly && !pptxLayoutOnly && !compatibilityOnly) {
+            if (!layoutOnly && !imagesOnly && !imageCacheOnly && !xlsxOnly && !xlsxTextOnly && !pptxOnly && !pptxLayoutOnly && !compatibilityOnly) {
                 results.append(PackageOpeningChecks.run(getTargetContext()));
                 results.append(PackageLimitChecks.run(getTargetContext()));
             }
@@ -126,6 +127,14 @@ public final class OfficeInstrumentation extends Instrumentation {
             activity = (PreviewTestActivity) waitForMonitorWithTimeout(monitor, 10000);
             removeMonitor(monitor);
             check(activity != null, "Test activity starts");
+            if (xlsxTextOnly) {
+                runOnMainChecked(() -> results.append(SheetRenderingChecks.run(getTargetContext())));
+                results.append(LongCellChecks.run(this, activity));
+                runOnMainSync(() -> activity.finish());
+                output.putString("stream", "\n" + results + "ALL XLSX TEXT CHECKS PASSED\n");
+                finish(Activity.RESULT_OK, output);
+                return;
+            }
             if (compatibilityOnly) {
                 results.append(CompatibilityChecks.run(this, activity));
                 runOnMainSync(() -> activity.finish());
@@ -156,6 +165,7 @@ public final class OfficeInstrumentation extends Instrumentation {
                 results.append(SheetLayoutChecks.run());
                 runOnMainChecked(() -> results.append(SheetRenderingChecks.run(getTargetContext())));
                 results.append(SpreadsheetChecks.run(this, activity));
+                results.append(LongCellChecks.run(this, activity));
             }
             if (xlsxOnly) {
                 runOnMainSync(() -> activity.finish());

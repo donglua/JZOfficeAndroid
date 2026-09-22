@@ -33,6 +33,7 @@ final class SheetRenderingChecks {
         log.append("PASS wrap, explicit multiline, numeric alignment, font styling and text clipping\n");
         checkCache();
         log.append("PASS visible-only layout, bounded cache, sheet replacement and clear\n");
+        log.append(SheetTextChecks.run());
         return log.append("SHEET RENDERING CHECKS PASSED\n").toString();
     }
 
@@ -206,8 +207,15 @@ final class SheetRenderingChecks {
         SpreadsheetDocument.CellStyle wrap = new SpreadsheetDocument.CellStyle(); wrap.wrap = true;
         renderer.setSheet(large, Collections.singletonList(wrap));
         check(cache(renderer).isEmpty(), "Sheet replacement discards all cached layouts");
+        long started = android.os.SystemClock.uptimeMillis();
         bitmap = render(renderer, new RectF(0, 0, 240, 120)); bitmap.recycle();
-        check(cache(renderer).isEmpty(), "Oversized text layout is not retained");
+        long elapsed = android.os.SystemClock.uptimeMillis() - started;
+        StaticLayout preview = (StaticLayout) cache(renderer).get(large.cells.get(0));
+        check(preview != null && preview.getText().length() <= 4096,
+            "Long cell uses a bounded cached preview; first draw took " + elapsed + " ms");
+        check(large.cells.get(0).text.length() == text.length, "Preview keeps the original cell text");
+        bitmap = render(renderer, new RectF(0, 0, 240, 120)); bitmap.recycle();
+        check(cache(renderer).get(large.cells.get(0)) == preview, "Long cell redraw reuses bounded layout");
         renderer.clear();
         check(renderer.width == 0 && renderer.height == 0 && cache(renderer).isEmpty(), "Clear releases dimensions and text layouts");
     }

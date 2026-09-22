@@ -434,9 +434,9 @@ adb shell am instrument -w -e suite compatibility cn.jingzhuan.lib.office.test/c
 
 0.3.0 验证记录：Debug/Release 构建、Release lint、47 项网络检查、缓存检查和 Rust 检查已通过。双模块本地发布产物检查已通过；独立消费项目使用 Gradle 元数据和纯 POM 均能从新坐标的 `viewer-online:0.3.0` 解析出同版本 `viewer`。容器限制、图片、PPTX、XLSX、排版、Demo 三种样例和在线模块生命周期专项均已在 Android 真机通过。正式签名和上传由发布 CI 执行，结果见 [Actions](https://github.com/donglua/JZOfficeAndroid/actions/workflows/publish-sonatype.yml)。
 
-**完整设备回归仍有未通过项**：曾出现输入分发 ANR；进一步诊断观察到约 26 万字符的 XLSX 单元格在主线程断行计算中持续阻塞，现有缓存预算和最大行数不能避免该次计算。本次修复前的完整设备重跑通过了 PPTX 背景检查，随后停在双击缩放断言。
+约 26 万字符的 XLSX 单元格曾在主线程断行计算中持续阻塞：缓存预算在布局完成后才检查，最大行数也无法限制首次断行的输入量。现已在测宽和断行前限制预览文字，并缓存实际预览布局。同一 Android 真机上，修复前单元格首次绘制耗时 32044 ms；修复后换行及对齐组合专项的最慢首次绘制为 20 ms，真实 XLSX 中六个超长单元格的首次绘制合计为 63 ms。`xlsx-text` 和完整 `xlsx` 专项通过，普通表格五张前后截图像素一致；以上为单次设备回归结果，不代表所有设备的性能上限。**完整设备回归仍有未通过项**：重跑已通过 XLSX 和 PPTX 背景检查，随后停在此前已有的双击缩放断言。
 
-PPTX 屏幕背景色断言已定位为 8 位 Display P3 截图转回 sRGB 时的量化误差：`#F4F7FA` 可读回为 `#F3F7FA` 或 `#F5F7FA`。窗口截图检查现允许 RGB 各通道相差 1，保留 alpha 相等及超过 100 个采样点的要求；模型与离屏 Canvas 背景断言保持原有精度。新增 sRGB、Display P3 及错误背景回归可通过 `-e suite backgrounds` 运行，修复后的设备复测尚待完成。以下命令为复验入口，不代表完整设备套件已通过。
+PPTX 屏幕背景色断言已定位为 8 位 Display P3 截图转回 sRGB 时的量化误差：`#F4F7FA` 可读回为 `#F3F7FA` 或 `#F5F7FA`。窗口截图检查现允许 RGB 各通道相差 1，保留 alpha 相等及超过 100 个采样点的要求；模型与离屏 Canvas 背景断言保持原有精度。新增 sRGB、Display P3 及错误背景回归可通过 `-e suite backgrounds` 运行，修复后的真机专项已通过。以下命令为复验入口，不代表完整设备套件已通过。
 
 ```sh
 cargo test --workspace
@@ -529,6 +529,12 @@ DOCX、PPTX、XLSX 输入文件最多 128 MiB，ZIP 声明的解压总量最多 
 每个 PPTX 折线图最多 8 个系列、每系列 2048 个数据槽位、合计 4096 个槽位，超过时省略该图表并提示。图表生成的线段、坐标轴和文字也计入整份 PPTX 的 5000 元素上限。
 
 XLSX 最多 32 个工作表，每表最多 10000 行、256 列；整份文件最多 50000 个存储单元格、50000 个共享字符串、2048 个样式、1000 个合并区域，累计文字预算 8 MiB。单元格以稀疏列表保存，Android 只绘制可见区域，文字布局缓存最多 256 项并受文字量预算约束。仍一次解析完整模型；XML 等通用限制可能更早触发，不代表支持任意 50000 单元格文件。
+
+XLSX 每个单元格的预览文字最多 4096 个 UTF-16 码元（包含末尾省略号），超出时保留前缀，截断处不会拆开代理对。测宽和断行均使用该预览文字，缓存预算按实际布局文字计费；原始模型文字和源文件保持完整。发生截断时，`Info.warnings` 返回 `Long spreadsheet cell text is truncated in the preview`。`-e suite xlsx-text` 覆盖约 26 万字符的内联字符串、共享字符串及公式缓存值，检查换行、对齐、缓存复用和淘汰，以及 URI/JNI 加载、提示回调、缩放、拖动和返回；通过标志为 `ALL XLSX TEXT CHECKS PASSED`，完整 `xlsx` 专项也包含这些检查。
+
+```sh
+adb shell am instrument -w -e suite xlsx-text cn.jingzhuan.lib.office.test/cn.jingzhuan.lib.office.OfficeInstrumentation
+```
 
 Android 优先缓存可见图片，并利用剩余预算保留最近使用的离屏图片；相同图片路径共用缓存。返回时可直接复用未被淘汰的图片。全部缓存共用 800 万像素预算（ARGB_8888 约 30.5 MiB），通常最多保留 32 项；可见图片超过 32 项时保留全部可见项，仍受像素预算约束。预算不足时按最近使用顺序淘汰离屏图片，释放缓存引用但不手动回收已绘制的 Bitmap；退出预览或解除挂载时清空缓存。
 
