@@ -24,6 +24,7 @@ final class PptxBackgroundChecks {
     private PptxBackgroundChecks() { }
 
     static String run(OfficeInstrumentation instrumentation) throws Exception {
+        String screenshotChecks = ScreenshotColorChecks.run();
         Context context = instrumentation.getTargetContext();
         Uri uri = Uri.parse("content://" + context.getPackageName() + ".fixtures/" + FIXTURE);
         try (OfficePackage source = OfficePackage.open(context, uri)) {
@@ -43,7 +44,7 @@ final class PptxBackgroundChecks {
                 instrumentation.runOnMainChecked(() -> capture(context, document, Collections.singletonMap(IMAGE, title)));
             } finally { title.recycle(); }
         }
-        return "PASS PPTX background sample URI/JNI, inherited gradient, slide-space fill, transparent PNG and shader reset pixels\n"
+        return screenshotChecks + "PASS PPTX background sample URI/JNI, inherited gradient, slide-space fill, transparent PNG and shader reset pixels\n"
             + "SCREENSHOTS pptx-backgrounds.png\n";
     }
 

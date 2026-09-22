@@ -434,7 +434,9 @@ adb shell am instrument -w -e suite compatibility cn.jingzhuan.lib.office.test/c
 
 0.3.0 验证记录：Debug/Release 构建、Release lint、47 项网络检查、缓存检查和 Rust 检查已通过。双模块本地发布产物检查已通过；独立消费项目使用 Gradle 元数据和纯 POM 均能从新坐标的 `viewer-online:0.3.0` 解析出同版本 `viewer`。容器限制、图片、PPTX、XLSX、排版、Demo 三种样例和在线模块生命周期专项均已在 Android 真机通过。正式签名和上传由发布 CI 执行，结果见 [Actions](https://github.com/donglua/JZOfficeAndroid/actions/workflows/publish-sonatype.yml)。
 
-**完整设备回归仍有未通过项**：曾出现输入分发 ANR；进一步诊断观察到约 26 万字符的 XLSX 单元格在主线程断行计算中持续阻塞，现有缓存预算和最大行数不能避免该次计算。完整套件另有 PPTX 屏幕背景色断言失败，截图中已绘出内容，该断言问题尚未解决。以下命令为复验入口，不代表完整设备套件已通过。
+**完整设备回归仍有未通过项**：曾出现输入分发 ANR；进一步诊断观察到约 26 万字符的 XLSX 单元格在主线程断行计算中持续阻塞，现有缓存预算和最大行数不能避免该次计算。本次修复前的完整设备重跑通过了 PPTX 背景检查，随后停在双击缩放断言。
+
+PPTX 屏幕背景色断言已定位为 8 位 Display P3 截图转回 sRGB 时的量化误差：`#F4F7FA` 可读回为 `#F3F7FA` 或 `#F5F7FA`。窗口截图检查现允许 RGB 各通道相差 1，保留 alpha 相等及超过 100 个采样点的要求；模型与离屏 Canvas 背景断言保持原有精度。新增 sRGB、Display P3 及错误背景回归可通过 `-e suite backgrounds` 运行，修复后的设备复测尚待完成。以下命令为复验入口，不代表完整设备套件已通过。
 
 ```sh
 cargo test --workspace

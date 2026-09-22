@@ -445,11 +445,7 @@ public final class OfficeInstrumentation extends Instrumentation {
             if (bitmap != null) bitmap.recycle();
             bitmap = getUiAutomation().takeScreenshot();
             check(bitmap != null, "Window screenshot available: " + name);
-            paper = 0;
-            for (int y = 0; y < bitmap.getHeight(); y += 16) for (int x = 0; x < bitmap.getWidth(); x += 16) {
-                int pixel = bitmap.getPixel(x, y);
-                if (pixel == expectedPaper.get()) paper++;
-            }
+            paper = ScreenshotColorChecks.countPaper(bitmap, expectedPaper.get());
             if (paper > 100) break;
             SystemClock.sleep(50);
         } while (SystemClock.uptimeMillis() < deadline);
@@ -457,7 +453,8 @@ public final class OfficeInstrumentation extends Instrumentation {
             check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, output), "Window capture saved: " + name);
         }
         bitmap.recycle();
-        check(paper > 100, "Window contains document paper: " + name);
+        check(paper > 100, "Window contains document paper: " + name
+            + " (expected #" + Integer.toHexString(expectedPaper.get()) + ", samples=" + paper + ")");
     }
 
     private void doubleTap() {
