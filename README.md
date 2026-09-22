@@ -70,6 +70,8 @@ PPTX 自动编号新增 16 种常见格式：阿拉伯数字、大小写字母�
 
 DOCX 新增一致显式字体名的传递（最长 256 字节），保留文档默认、段落样式、字符样式和直接格式的继承顺序。混合字体或未解析的主题字体仍使用默认字体；设备缺少字体时由系统替换，不内置字体文件。此项尚未包含在 0.3.0 发布包中。
 
+PPTX 新增三角形、直角三角形和菱形，沿用已有路径渲染，保留填充、描边、旋转和翻转。三角形支持数值顶点调整；不支持的调整公式仍省略图形并提示。此项尚未包含在 0.3.0 发布包中。
+
 ### 旧版 Office 格式
 
 旧版 `.doc`、`.ppt`、`.xls` 使用各自的二进制格式，与当前支持的 ZIP/OOXML 结构不同，无法直接复用现有解析器。支持这些格式需要增加独立的解析逻辑，并适配文字、图片、样式与布局。读取文字或单元格数据只是其中一部分，保留可用的预览效果还需要额外的兼容性处理与测试。
@@ -421,6 +423,14 @@ signing.password=<gpg-passphrase>
 根任务上传两个模块后只向 Portal 交接一次。旧命令 `:viewer:publishToSonatype` 保留为兼容入口，同样发布两个模块。本地默认使用 `user_managed` 模式，上传后在 Central Portal 手动发布；需要验证通过后自动发布时，增加 `-PsonatypePublishingType=automatic`，GitHub Actions 已使用该参数。Central 发布后坐标不可修改或删除。
 
 ## 验证
+
+源码新增兼容项使用 `-e suite compatibility`，覆盖 XLSX 调色板和 tint、PPTX 16 种编号、DOCX 显式字体，以及三角形、直角三角形和菱形。检查真实文档经 JNI 解析后的模型、Android 字体或 Canvas 像素，并通过 URI 打开预览保存截图；通过标志为 `ALL COMPATIBILITY CHECKS PASSED`。
+
+```bash
+./gradlew :viewer:assembleDebugAndroidTest
+adb install -r viewer/build/outputs/apk/androidTest/debug/viewer-debug-androidTest.apk
+adb shell am instrument -w -e suite compatibility cn.jingzhuan.lib.office.test/cn.jingzhuan.lib.office.OfficeInstrumentation
+```
 
 0.3.0 验证记录：Debug/Release 构建、Release lint、47 项网络检查、缓存检查和 Rust 检查已通过。双模块本地发布产物检查已通过；独立消费项目使用 Gradle 元数据和纯 POM 均能从新坐标的 `viewer-online:0.3.0` 解析出同版本 `viewer`。容器限制、图片、PPTX、XLSX、排版、Demo 三种样例和在线模块生命周期专项均已在 Android 真机通过。正式签名和上传由发布 CI 执行，结果见 [Actions](https://github.com/donglua/JZOfficeAndroid/actions/workflows/publish-sonatype.yml)。
 

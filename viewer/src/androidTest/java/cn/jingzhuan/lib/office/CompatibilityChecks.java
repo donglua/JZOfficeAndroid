@@ -26,7 +26,8 @@ final class CompatibilityChecks {
         return "PASS custom XLSX palette through JNI, font/fill/border colors, Canvas pixels and URI preview\n"
             + "PASS XLSX positive/negative tint through JNI, Canvas colors and URI preview\n"
             + PptxNumberingChecks.run(instrumentation, activity)
-            + DocxFontChecks.run(instrumentation, activity);
+            + DocxFontChecks.run(instrumentation, activity)
+            + PptxPresetChecks.run(instrumentation, activity);
     }
 
     private static void tint(OfficeInstrumentation instrumentation, PreviewTestActivity activity) throws Exception {

@@ -8,6 +8,7 @@ mod inheritance;
 mod numbering;
 mod parts;
 mod path;
+mod preset_geometry;
 mod render;
 mod round_rect;
 mod styles;

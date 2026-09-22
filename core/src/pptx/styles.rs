@@ -64,6 +64,11 @@ impl Styles<'_> {
                             }
                             None => (),
                         }
+                    } else if let Some(path) =
+                        super::preset_geometry::path(geometry, [element.width, element.height])
+                    {
+                        element.paths.push(path);
+                        preset = "path";
                     }
                 }
                 if properties.child("custGeom").is_some() {
