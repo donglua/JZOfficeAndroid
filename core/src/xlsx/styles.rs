@@ -52,7 +52,11 @@ pub(super) fn parse(
             return Err(Error::Limit("XLSX style table exceeds 2048 entries"));
         }
     }
-    let colors = Colors::new(theme)?;
+    let colors = Colors::new(
+        theme,
+        root.child("colors")
+            .and_then(|colors| colors.child("indexedColors")),
+    )?;
     let mut tables = Tables {
         fonts: Vec::new(),
         fills: Vec::new(),
@@ -120,9 +124,6 @@ pub(super) fn parse(
     }
     if result.is_empty() {
         result.push(Style::default());
-    }
-    if root.child("colors").is_some() {
-        document.warn("Custom indexed color palettes are not supported");
     }
     Ok(result)
 }

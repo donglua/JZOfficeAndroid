@@ -23,9 +23,11 @@ public final class OfficeInstrumentation extends Instrumentation {
     private final StringBuilder results = new StringBuilder();
     private boolean layoutOnly, limitsOnly, imagesOnly, xlsxOnly, demoOnly, pptxOnly, pathsOnly, tablesOnly, backgroundsOnly;
     private boolean demoSamplesOnly, sheetLayoutOnly, pptxGeometryOnly, pptxLayoutOnly, imageCacheOnly;
+    private boolean compatibilityOnly;
 
     @Override public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
+        compatibilityOnly = arguments != null && "compatibility".equals(arguments.getString("suite"));
         layoutOnly = arguments != null && "layout".equals(arguments.getString("suite"));
         limitsOnly = arguments != null && "limits".equals(arguments.getString("suite"));
         imagesOnly = arguments != null && "images".equals(arguments.getString("suite"));
@@ -105,7 +107,7 @@ public final class OfficeInstrumentation extends Instrumentation {
                 finish(Activity.RESULT_OK, output);
                 return;
             }
-            if (!layoutOnly && !imagesOnly && !imageCacheOnly && !xlsxOnly && !pptxOnly && !pptxLayoutOnly) {
+            if (!layoutOnly && !imagesOnly && !imageCacheOnly && !xlsxOnly && !pptxOnly && !pptxLayoutOnly && !compatibilityOnly) {
                 results.append(PackageOpeningChecks.run(getTargetContext()));
                 results.append(PackageLimitChecks.run(getTargetContext()));
             }
@@ -124,6 +126,13 @@ public final class OfficeInstrumentation extends Instrumentation {
             activity = (PreviewTestActivity) waitForMonitorWithTimeout(monitor, 10000);
             removeMonitor(monitor);
             check(activity != null, "Test activity starts");
+            if (compatibilityOnly) {
+                results.append(CompatibilityChecks.run(this, activity));
+                runOnMainSync(() -> activity.finish());
+                output.putString("stream", "\n" + results + "ALL COMPATIBILITY CHECKS PASSED\n");
+                finish(Activity.RESULT_OK, output);
+                return;
+            }
             if (pptxLayoutOnly || pptxOnly) results.append(PptxLayoutChecks.run(this, activity));
             if (pptxLayoutOnly) {
                 runOnMainSync(() -> activity.finish());

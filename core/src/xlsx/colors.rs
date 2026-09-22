@@ -6,17 +6,24 @@ use crate::{Error, Result};
 pub(super) struct Colors {
     theme: [u32; 12],
     has_theme: bool,
+    indexed: [u32; 64],
 }
 
 impl Colors {
-    pub(super) fn new(theme: Option<&Node>) -> Result<Self> {
+    pub(super) fn new(theme: Option<&Node>, palette: Option<&Node>) -> Result<Self> {
         let mut result = Self {
             theme: [
                 0xffffffff, 0xff000000, 0xffeeece1, 0xff1f497d, 0xff4f81bd, 0xffc0504d, 0xff9bbb59,
                 0xff8064a2, 0xff4bacc6, 0xfff79646, 0xff0000ff, 0xff800080,
             ],
             has_theme: theme.is_some(),
+            indexed: INDEXED,
         };
+        if let Some(palette) = palette {
+            for (value, node) in result.indexed.iter_mut().zip(palette.named("rgbColor")) {
+                *value = rgb(node.attr("rgb"))?;
+            }
+        }
         if let Some(scheme) = theme.and_then(|theme| theme.descendant("clrScheme")) {
             for (index, name) in [
                 "lt1", "dk1", "lt2", "dk2", "accent1", "accent2", "accent3", "accent4", "accent5",
@@ -67,7 +74,7 @@ impl Colors {
                 0..=63 => {
                     let index = usize::try_from(index)
                         .map_err(|_| Error::Invalid("Invalid XLSX indexed color"))?;
-                    0xff000000 | INDEXED[index]
+                    0xff000000 | self.indexed[index]
                 }
                 64 | 65 => fallback,
                 _ => return Err(Error::Invalid("Invalid XLSX indexed color")),
