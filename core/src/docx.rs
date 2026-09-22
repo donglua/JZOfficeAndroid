@@ -148,7 +148,6 @@ fn inspect(node: &Node, document: &mut Document) {
         "cols" if xml::number(node.attr("num"), 1.0) > 1.0 => {
             Some("Multiple columns are rendered in a single continuous flow.")
         }
-        "rFonts" => Some("Font families use the viewer's default font."),
         "color" if !node.attr("themeColor").is_empty() => {
             Some("Theme colors use saved colors or inherited fallbacks.")
         }

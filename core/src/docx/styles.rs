@@ -1,5 +1,5 @@
-use super::format::{self, ParagraphFormat};
-use crate::model::{Document, Paragraph, Run};
+use super::format::{self, Font, ParagraphFormat};
+use crate::model::{Document, Paragraph};
 use crate::xml::Node;
 use crate::{Error, Package, Result};
 use std::collections::{HashMap, HashSet};
@@ -10,7 +10,7 @@ const MAX_STYLE_DEPTH: usize = 64;
 #[derive(Default)]
 pub(super) struct Styles {
     entries: HashMap<String, Node>,
-    font: Run,
+    font: Font,
     paragraph: ParagraphFormat,
     default_paragraph: String,
     pub default_character: String,
@@ -88,7 +88,7 @@ impl Styles {
         chain
     }
 
-    pub fn paragraph(&self, node: &Node, document: &mut Document) -> (Paragraph, Run) {
+    pub fn paragraph(&self, node: &Node, document: &mut Document) -> (Paragraph, Font) {
         let mut format = self.paragraph.clone();
         let mut font = self.font.clone();
         let properties = node.child("pPr");
@@ -116,7 +116,7 @@ impl Styles {
             }),
         };
         if let Some(level) = level {
-            font.size = match level {
+            font.run.size = match level {
                 1 => 24.0,
                 2 => 20.0,
                 3 => 16.0,
@@ -124,7 +124,7 @@ impl Styles {
                 5 => 13.0,
                 _ => 12.0,
             };
-            font.bold = true;
+            font.run.bold = true;
             format.paragraph.before = 12.0;
         }
         for style in chain.iter().rev() {

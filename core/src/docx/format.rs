@@ -1,6 +1,53 @@
 use super::MAX_COORDINATE;
-use crate::model::{LineSpacingRule, Paragraph, Run};
+use crate::model::{Document, LineSpacingRule, Paragraph, Run};
 use crate::xml::{self, Node};
+
+#[derive(Clone, Default)]
+pub(super) struct Font {
+    pub run: Run,
+    families: [FontFamily; 4],
+}
+
+#[derive(Clone, Default)]
+enum FontFamily {
+    #[default]
+    Default,
+    Explicit(String),
+    Theme,
+}
+
+impl Font {
+    pub fn run(&self, text: &str, document: &mut Document) -> Run {
+        let mut run = Run {
+            text: text.to_owned(),
+            ..self.run.clone()
+        };
+        let mut face = None;
+        for family in &self.families {
+            match family {
+                FontFamily::Default => (),
+                FontFamily::Theme => {
+                    document.warn("Theme fonts use the viewer's default font.");
+                    return run;
+                }
+                FontFamily::Explicit(value) => {
+                    if face.is_some_and(|previous| previous != value) {
+                        document.warn("Mixed-script font families use the viewer's default font.");
+                        return run;
+                    }
+                    face = Some(value);
+                }
+            }
+        }
+        if let Some(face) = face {
+            run.font_face.clone_from(face);
+            document.warn(
+                "Font families use available device fonts; missing fonts may be substituted.",
+            );
+        }
+        run
+    }
+}
 
 pub(super) fn enabled(value: &str) -> bool {
     !["0", "false", "off", "none"]
@@ -16,13 +63,32 @@ pub(super) fn points(value: &str, fallback: f32) -> f32 {
         .map_or(fallback, |n| (n / 20.0).clamp(0.0, MAX_COORDINATE))
 }
 
-pub(super) fn font(run: &mut Run, properties: Option<&Node>) {
+pub(super) fn font(font: &mut Font, properties: Option<&Node>) {
     let Some(properties) = properties else {
         return;
     };
+    let run = &mut font.run;
     for node in &properties.children {
         let value = node.attr("val");
         match node.name.as_str() {
+            "rFonts" => {
+                // Theme wins in this node; either choice replaces that script's inherited value.
+                for ((name, theme), family) in [
+                    ("ascii", "asciiTheme"),
+                    ("hAnsi", "hAnsiTheme"),
+                    ("eastAsia", "eastAsiaTheme"),
+                    ("cs", "cstheme"),
+                ]
+                .into_iter()
+                .zip(&mut font.families)
+                {
+                    if !node.attr(theme).trim().is_empty() {
+                        *family = FontFamily::Theme;
+                    } else if !node.attr(name).trim().is_empty() {
+                        *family = FontFamily::Explicit(node.attr(name).trim().to_owned());
+                    }
+                }
+            }
             "b" => run.bold = enabled(value),
             "i" => run.italic = enabled(value),
             "u" => run.underline = enabled(value),

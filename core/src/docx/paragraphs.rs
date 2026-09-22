@@ -22,7 +22,7 @@ impl Parser<'_> {
         if flow.elements.is_empty() && flow.current.runs.is_empty() {
             let mut mark = font;
             format::font(&mut mark, node.child("pPr").and_then(|n| n.child("rPr")));
-            flow.text("", &mark);
+            flow.text(mark.run("", &mut self.document));
         }
         if !flow.current.runs.is_empty() || flow.elements.is_empty() {
             flow.flush()?;
@@ -30,7 +30,7 @@ impl Parser<'_> {
         Ok(flow.elements)
     }
 
-    fn inline(&mut self, parent: &Node, font: &Run, flow: &mut Flow) -> Result<()> {
+    fn inline(&mut self, parent: &Node, font: &format::Font, flow: &mut Flow) -> Result<()> {
         for node in &parent.children {
             match node.name.as_str() {
                 "r" => {
@@ -45,17 +45,17 @@ impl Parser<'_> {
                     format::font(&mut font, properties);
                     self.inline(node, &font, flow)?;
                 }
-                "t" => flow.text(&node.text, font),
-                "tab" | "ptab" => flow.text("\t", font),
+                "t" => flow.text(font.run(&node.text, &mut self.document)),
+                "tab" | "ptab" => flow.text(font.run("\t", &mut self.document)),
                 "br" | "cr" => {
                     if matches!(node.attr("type"), "page" | "column") {
                         self.document
                             .warn("Page and column breaks are rendered as line breaks.");
                     }
-                    flow.text("\n", font);
+                    flow.text(font.run("\n", &mut self.document));
                 }
-                "noBreakHyphen" => flow.text("\u{2011}", font),
-                "softHyphen" => flow.text("\u{ad}", font),
+                "noBreakHyphen" => flow.text(font.run("\u{2011}", &mut self.document)),
+                "softHyphen" => flow.text(font.run("\u{ad}", &mut self.document)),
                 "drawing" => {
                     if flow.in_cell {
                         self.document.warn("Images inside table cells are omitted.");
@@ -96,11 +96,8 @@ struct Flow {
 }
 
 impl Flow {
-    fn text(&mut self, text: &str, font: &Run) {
-        self.current.runs.push(Run {
-            text: text.to_owned(),
-            ..font.clone()
-        });
+    fn text(&mut self, run: Run) {
+        self.current.runs.push(run);
     }
 
     fn image(&mut self, image: Element) -> Result<()> {
