@@ -183,10 +183,11 @@ pub fn layout_ids(source: &str, next_id: &mut u32) -> TestResult<String> {
     Ok(apply(source, edits))
 }
 
-pub fn index(chapters: &[(String, String)]) -> String {
-    let mut paragraphs = String::from(
+pub fn index(chapters: &[(String, String)], sample_pages: usize) -> String {
+    let groups = chapters.len();
+    let mut paragraphs = format!(
         r#"<a:p><a:pPr><a:spcAft><a:spcPts val="1600"/></a:spcAft></a:pPr><a:r><a:rPr sz="3600" b="1"/><a:t>PPTX 功能对照</a:t></a:r></a:p>
-<a:p><a:pPr><a:spcAft><a:spcPts val="2400"/></a:spcAft></a:pPr><a:r><a:rPr sz="1800"/><a:t>7 组主题，15 页样例。按展示条件核对预期效果，细节可放大查看。</a:t></a:r></a:p>"#,
+<a:p><a:pPr><a:spcAft><a:spcPts val="2400"/></a:spcAft></a:pPr><a:r><a:rPr sz="1800"/><a:t>{groups} 组主题，{sample_pages} 页样例。按展示条件核对预期效果，细节可放大查看。</a:t></a:r></a:p>"#,
     );
     for (title, pages) in chapters {
         paragraphs.push_str(&format!(r#"<a:p><a:pPr><a:spcAft><a:spcPts val="1400"/></a:spcAft></a:pPr><a:r><a:rPr sz="2200"/><a:t>{pages}    {title}</a:t></a:r></a:p>"#));

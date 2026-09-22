@@ -1,13 +1,14 @@
 use super::{
     package::{relationships, Parts, TestResult},
-    pptx, pptx_backgrounds, pptx_charts, pptx_colors, pptx_compat, pptx_showcase_notes,
+    pptx, pptx_backgrounds, pptx_charts, pptx_colors, pptx_compat, pptx_compat_showcase,
+    pptx_showcase_notes,
     pptx_showcase_xml::{self as xml, Frame, HEIGHT, WIDTH},
     pptx_typography, pptx_wrapping_showcase,
 };
 use roxmltree::Document;
 
 pub type OwnedParts = Vec<(String, Vec<u8>)>;
-pub const PAGE_COUNT: usize = 16;
+pub const PAGE_COUNT: usize = 18;
 
 pub fn parts() -> TestResult<OwnedParts> {
     let mut output = Vec::new();
@@ -50,9 +51,15 @@ pub fn parts() -> TestResult<OwnedParts> {
             "背景：继承、透明图片与图形变换",
             pptx_backgrounds::parts(),
         ),
+        (
+            "compatibility",
+            "兼容补充：自动编号与预设图形",
+            pptx_compat_showcase::parts(),
+        ),
     ] {
         let presentation = part(&source, "ppt/presentation.xml")?;
-        let frame = Frame::read(presentation, key != "wrapping")?;
+        let annotated = !matches!(key, "wrapping" | "compatibility");
+        let frame = Frame::read(presentation, annotated)?;
         let mut targets = slide_targets(&source)?;
         if key == "compat" {
             targets.truncate(1);
@@ -115,7 +122,7 @@ pub fn parts() -> TestResult<OwnedParts> {
                 let normalized = frame.normalize(std::str::from_utf8(&bytes)?)?;
                 if path.starts_with("ppt/slideMasters/") {
                     xml::layout_ids(&normalized, &mut layout_id)?.into_bytes()
-                } else if path.starts_with("ppt/slides/") && key != "wrapping" {
+                } else if path.starts_with("ppt/slides/") && annotated {
                     pptx_showcase_notes::annotate(&normalized, key, path)?.into_bytes()
                 } else {
                     normalized.into_bytes()
@@ -178,7 +185,7 @@ pub fn parts() -> TestResult<OwnedParts> {
         ),
         (
             "ppt/slides/index.xml".to_owned(),
-            xml::index(&chapters).into_bytes(),
+            xml::index(&chapters, slides.len() - 1).into_bytes(),
         ),
         (
             "ppt/slides/_rels/index.xml.rels".to_owned(),

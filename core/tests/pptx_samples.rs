@@ -5,7 +5,7 @@ use std::{collections::HashSet, io::Cursor};
 use support::{
     checks,
     package::{archive, TestResult},
-    pptx_backgrounds, pptx_wrapping,
+    pptx_backgrounds, pptx_compat_showcase, pptx_wrapping,
 };
 
 #[test]
@@ -13,6 +13,7 @@ fn new_samples_use_unique_non_visual_shape_ids_on_each_slide() -> TestResult {
     for (sample, parts) in [
         ("wrapping", pptx_wrapping::parts()),
         ("backgrounds", pptx_backgrounds::parts()),
+        ("compatibility", pptx_compat_showcase::parts()),
     ] {
         for (path, bytes) in parts
             .iter()

@@ -153,8 +153,13 @@ fn data() -> String {
         row(3, 54, &format!("{}{}{}", text("A3", 7, "整数值\n预期：42"), text("B3", 7, "文本公式缓存\n预期：ready"), text("C3", 7, "B2 只显示文件缓存\n不重新计算公式"))),
         row(4, 30, &text("A4", 8, "工作表切换｜名称与顺序")),
         row(5, 54, &text("A5", 7, "预期：Overview 在前，Data 在后。点击底部标签切换，顶部页码应同步为 1 / 2 或 2 / 2。")),
+        row(7, 30, &text("A7", 8, "调色板与明暗色｜B 实际 · C 预期")),
+        row(8, 48, &format!("{}{}{}", text("A8", 7, "自定义调色板\n字体 / 填充 / 边框"), text("B8", 9, "Palette 调色板"), text("C8", 7, "深蓝字 · 浅绿底\n四边为紫红色"))),
+        row(9, 42, &format!("{}{}{}", text("A9", 7, "蓝色原色\ntint = 0"), text("B9", 10, "原色 Blue"), text("C9", 7, "#0000FF\n作为明暗比较基准"))),
+        row(10, 42, &format!("{}{}{}", text("A10", 7, "提高明度\ntint = +0.5"), text("B10", 11, "变亮 Lighter"), text("C10", 7, "#8080FF\n蓝色变浅，接近白色"))),
+        row(11, 42, &format!("{}{}{}", text("A11", 7, "降低明度\ntint = -0.5"), text("B11", 12, "变暗 Darker"), text("C11", 7, "#000080\n蓝色变深，接近黑色"))),
     ].concat();
-    worksheet(&rows, &["A1:C1", "A4:C4", "A5:C5"], false)
+    worksheet(&rows, &["A1:C1", "A4:C4", "A5:C5", "A7:C7"], false)
 }
 
 fn worksheet(rows: &str, merges: &[&str], scroll: bool) -> String {
@@ -184,8 +189,13 @@ fn text(coordinate: &str, style: u32, value: &str) -> String {
 
 fn styles() -> String {
     xlsx::STYLES
-        .replace(r#"<fills count="3">"#, r#"<fills count="4">"#)
-        .replace("</fills>", r#"<fill><patternFill patternType="solid"><fgColor rgb="FFE4F0F5"/></patternFill></fill></fills>"#)
-        .replace(r#"<cellXfs count="7">"#, r#"<cellXfs count="9">"#)
-        .replace("</cellXfs>", r#"<xf numFmtId="0" fontId="0" fillId="0" borderId="0"><alignment horizontal="left" vertical="bottom" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="3" borderId="0"><alignment horizontal="left" vertical="center" wrapText="1"/></xf></cellXfs>"#)
+        .replace(r#"<fonts count="2">"#, r#"<fonts count="4">"#)
+        .replace("</fonts>", r#"<font><sz val="11"/><color indexed="0"/></font><font><sz val="11"/><color rgb="FFFFFFFF"/></font></fonts>"#)
+        .replace(r#"<fills count="3">"#, r#"<fills count="8">"#)
+        .replace("</fills>", r#"<fill><patternFill patternType="solid"><fgColor rgb="FFE4F0F5"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor indexed="1"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FF0000FF" tint="0"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FF0000FF" tint="0.5"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FF0000FF" tint="-0.5"/></patternFill></fill></fills>"#)
+        .replace(r#"<borders count="2">"#, r#"<borders count="3">"#)
+        .replace("</borders>", r#"<border><left style="thin"><color indexed="2"/></left><top style="thin"><color indexed="2"/></top><right style="thin"><color indexed="2"/></right><bottom style="thin"><color indexed="2"/></bottom></border></borders>"#)
+        .replace(r#"<cellXfs count="7">"#, r#"<cellXfs count="13">"#)
+        .replace("</cellXfs>", r#"<xf numFmtId="0" fontId="0" fillId="0" borderId="0"><alignment horizontal="left" vertical="bottom" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="3" borderId="0"><alignment horizontal="left" vertical="center" wrapText="1"/></xf><xf fontId="2" fillId="4" borderId="2"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf fontId="3" fillId="5"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf fontId="0" fillId="6"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf fontId="3" fillId="7"><alignment horizontal="center" vertical="center" wrapText="1"/></xf></cellXfs>"#)
+        .replace("</styleSheet>", r#"<colors><indexedColors><rgbColor rgb="00202080"/><rgbColor rgb="00A0E0C0"/><rgbColor rgb="00800040"/></indexedColors></colors></styleSheet>"#)
 }

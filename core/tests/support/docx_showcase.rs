@@ -62,6 +62,36 @@ pub fn parts() -> Parts {
     ] {
         paragraphs.push_str(&case(label, properties, text));
     }
+    paragraphs.push_str(&section(
+        "07 字体与继承",
+        "前两例为等宽字体；第三例为衬线粗斜体；第四例覆盖为等宽并保留粗斜体。缺失字体由设备替换，中文字形也可能回退。",
+    ));
+    for (label, paragraph_style, run_properties) in [
+        ("直接指定等宽", "Normal", families("monospace")),
+        ("段落样式继承", "ShowcaseMono", String::new()),
+        (
+            "字符样式继承",
+            "ShowcaseMono",
+            r#"<w:rStyle w:val="ShowcaseSerif"/>"#.to_owned(),
+        ),
+        (
+            "直接覆盖字体",
+            "ShowcaseMono",
+            format!(
+                r#"<w:rStyle w:val="ShowcaseSerif"/>{}"#,
+                families("monospace")
+            ),
+        ),
+        (
+            "缺失字体回退",
+            "ShowcaseMono",
+            families("Unavailable Office Font"),
+        ),
+    ] {
+        paragraphs.push_str(&format!(
+            r#"<w:p><w:pPr><w:pStyle w:val="{paragraph_style}"/><w:spacing w:after="120"/></w:pPr><w:r><w:rPr>{run_properties}</w:rPr><w:t>{label}：iiii WWWW 0123456789 中文</w:t></w:r></w:p>"#
+        ));
+    }
     let title = section(
         "DOCX 综合样例",
         "按章节观察文字、图片、表格和段落排版。每项均标明设置与预期结果。",
@@ -105,6 +135,18 @@ pub fn parts() -> Parts {
                 .replace("Hello &#x4F60;&#x597D;", "English 混排")
                 .replace("<w:sectPr>", &format!("{paragraphs}<w:sectPr>"))
                 .into_bytes();
+        } else if *path == "word/styles.xml" {
+            let fonts = format!(
+                r#"<w:style w:type="paragraph" w:styleId="ShowcaseMonoBase"><w:basedOn w:val="Normal"/><w:rPr>{}</w:rPr></w:style>
+<w:style w:type="paragraph" w:styleId="ShowcaseMono"><w:basedOn w:val="ShowcaseMonoBase"/></w:style>
+<w:style w:type="character" w:styleId="ShowcaseSerifBase"><w:rPr>{}<w:b/><w:i/></w:rPr></w:style>
+<w:style w:type="character" w:styleId="ShowcaseSerif"><w:basedOn w:val="ShowcaseSerifBase"/></w:style>"#,
+                families("monospace"),
+                families("serif")
+            );
+            *bytes = docx::STYLES
+                .replace("</w:styles>", &format!("{fonts}</w:styles>"))
+                .into_bytes();
         }
     }
     parts
@@ -121,4 +163,8 @@ fn case(label: &str, properties: &str, text: &str) -> String {
     format!(
         r#"<w:p><w:pPr>{properties}</w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t>{label}：</w:t></w:r><w:r><w:t>{text}</w:t></w:r></w:p>"#
     )
+}
+
+fn families(face: &str) -> String {
+    format!(r#"<w:rFonts w:ascii="{face}" w:hAnsi="{face}" w:eastAsia="{face}" w:cs="{face}"/>"#)
 }

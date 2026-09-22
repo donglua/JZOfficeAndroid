@@ -87,3 +87,40 @@ fn showcase_contains_basic_content_and_paragraph_layout_cases() -> TestResult {
     }));
     Ok(())
 }
+
+#[test]
+fn showcase_preserves_explicit_inherited_and_missing_font_names() -> TestResult {
+    let document = parse_reader(Cursor::new(archive(&docx_showcase::parts())?))?;
+    let runs: Vec<_> = document
+        .blocks
+        .iter()
+        .flat_map(|block| &block.paragraphs)
+        .flat_map(|paragraph| &paragraph.runs)
+        .collect();
+    for (label, face, emphasized) in [
+        ("直接指定等宽", "monospace", false),
+        ("段落样式继承", "monospace", false),
+        ("字符样式继承", "serif", true),
+        ("直接覆盖字体", "monospace", true),
+        ("缺失字体回退", "Unavailable Office Font", false),
+    ] {
+        let run = runs
+            .iter()
+            .find(|run| run.text.starts_with(label))
+            .ok_or("Missing font showcase case")?;
+        assert_eq!(run.font_face, face);
+        assert_eq!(run.bold, emphasized);
+        assert_eq!(run.italic, emphasized);
+        assert!(run.text.contains("iiii WWWW 0123456789 中文"));
+    }
+    let original = runs
+        .iter()
+        .find(|run| run.text.starts_with("蓝色粗体"))
+        .ok_or("Missing original text style sample")?;
+    assert!(original.font_face.is_empty());
+    assert!(document
+        .warnings
+        .iter()
+        .any(|warning| warning.contains("device fonts")));
+    Ok(())
+}

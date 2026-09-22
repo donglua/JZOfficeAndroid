@@ -8,8 +8,8 @@ use std::io::Cursor;
 use support::{
     checks,
     package::{archive, TestResult},
-    pptx, pptx_backgrounds, pptx_charts, pptx_colors, pptx_compat, pptx_showcase, pptx_typography,
-    pptx_wrapping, pptx_wrapping_showcase,
+    pptx, pptx_backgrounds, pptx_charts, pptx_colors, pptx_compat, pptx_compat_showcase,
+    pptx_showcase, pptx_typography, pptx_wrapping, pptx_wrapping_showcase,
 };
 
 #[test]
@@ -18,14 +18,17 @@ fn showcase_preserves_all_source_slide_content_in_chapter_order() -> TestResult 
 
     let document = parse_reader(Cursor::new(archive(&parts)?))?;
 
-    assert_eq!(document.pages.len(), 16);
+    assert_eq!(document.pages.len(), pptx_showcase::PAGE_COUNT);
     assert_eq!(document.width, 960.0);
     assert!(document
         .pages
         .iter()
         .all(|page| [page.width, page.height] == [960.0, 540.0]));
     let index = checks::text(&document.pages[0].elements[0].paragraphs);
-    for range in ["02-03", "04", "05-06", "07-08", "09-10", "11-13", "14-16"] {
+    assert!(index.contains("8 组主题，17 页样例"));
+    for range in [
+        "02-03", "04", "05-06", "07-08", "09-10", "11-13", "14-16", "17-18",
+    ] {
         assert!(index.contains(range), "Missing chapter page range {range}");
     }
     let mut page_index = 1;
@@ -37,6 +40,7 @@ fn showcase_preserves_all_source_slide_content_in_chapter_order() -> TestResult 
         (pptx_typography::parts(), 2, true),
         (pptx_wrapping_showcase::parts()?, 3, false),
         (pptx_backgrounds::parts(), 3, true),
+        (pptx_compat_showcase::parts(), 2, false),
     ] {
         let source = parse_reader(Cursor::new(archive(&parts)?))?;
         for page in source.pages.into_iter().take(count) {
@@ -99,7 +103,7 @@ fn showcase_preserves_all_source_slide_content_in_chapter_order() -> TestResult 
             page_index += 1;
         }
     }
-    assert_eq!(page_index, 16);
+    assert_eq!(page_index, pptx_showcase::PAGE_COUNT);
     Ok(())
 }
 
@@ -205,6 +209,73 @@ fn three_comparison_pages_keep_all_nine_wrapping_conditions() -> TestResult {
             );
         }
     }
+    Ok(())
+}
+
+#[test]
+fn compatibility_pages_preserve_automatic_numbering_and_preset_geometry() -> TestResult {
+    let document = showcase()?;
+    let lists: Vec<_> = document.pages[16]
+        .elements
+        .iter()
+        .filter(|element| element.paragraphs.len() == 2)
+        .collect();
+    assert_eq!(lists.len(), 16);
+    for (list, (first, second)) in lists.iter().zip([
+        ("4. ", "5. "),
+        ("4) ", "5) "),
+        ("(4) ", "(5) "),
+        ("4 ", "5 "),
+        ("d. ", "e. "),
+        ("d) ", "e) "),
+        ("(d) ", "(e) "),
+        ("D. ", "E. "),
+        ("D) ", "E) "),
+        ("(D) ", "(E) "),
+        ("iv. ", "v. "),
+        ("iv) ", "v) "),
+        ("(iv) ", "(v) "),
+        ("IV. ", "V. "),
+        ("IV) ", "V) "),
+        ("(IV) ", "(V) "),
+    ]) {
+        assert_eq!(list.paragraphs[0].bullet, first);
+        assert_eq!(list.paragraphs[1].bullet, second);
+        assert_eq!(checks::text(&list.paragraphs), "步骤一步骤二");
+        assert_eq!([list.width, list.height], [208.0, 54.0]);
+    }
+    let shapes: Vec<_> = document.pages[17]
+        .elements
+        .iter()
+        .filter(|element| matches!(element.kind, ElementType::PATH))
+        .collect();
+    assert_eq!(shapes.len(), 6);
+    let vertices = [
+        vec![vec![0.0, 100.0], vec![64.0, 0.0], vec![128.0, 100.0]],
+        vec![vec![0.0, 100.0], vec![0.0, 0.0], vec![128.0, 100.0]],
+        vec![
+            vec![0.0, 50.0],
+            vec![64.0, 0.0],
+            vec![128.0, 50.0],
+            vec![64.0, 100.0],
+        ],
+        vec![vec![0.0, 100.0], vec![32.0, 0.0], vec![128.0, 100.0]],
+    ];
+    for (shape, vertices) in shapes.iter().zip(vertices) {
+        let json = serde_json::to_value(shape)?;
+        for (index, vertex) in vertices.iter().enumerate() {
+            assert_eq!(
+                json["paths"][0]["commands"][index]["points"],
+                serde_json::json!(vertex)
+            );
+        }
+        assert_eq!(json["paths"][0]["commands"][vertices.len()]["op"], "CLOSE");
+    }
+    assert!(shapes[4].flip_h);
+    assert_eq!(shapes[5].rotation, 90.0);
+    assert!(shapes
+        .iter()
+        .all(|shape| shape.stroke == 0xffffffff && shape.stroke_width == 2.0));
     Ok(())
 }
 

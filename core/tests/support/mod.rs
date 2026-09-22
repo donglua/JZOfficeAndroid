@@ -8,6 +8,7 @@ pub mod pptx_backgrounds;
 pub mod pptx_charts;
 pub mod pptx_colors;
 pub mod pptx_compat;
+pub mod pptx_compat_showcase;
 mod pptx_shapes;
 pub mod pptx_showcase;
 mod pptx_showcase_notes;
