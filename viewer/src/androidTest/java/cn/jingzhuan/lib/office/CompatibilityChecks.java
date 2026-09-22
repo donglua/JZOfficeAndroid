@@ -24,7 +24,8 @@ final class CompatibilityChecks {
         palette(instrumentation, activity);
         tint(instrumentation, activity);
         return "PASS custom XLSX palette through JNI, font/fill/border colors, Canvas pixels and URI preview\n"
-            + "PASS XLSX positive/negative tint through JNI, Canvas colors and URI preview\n";
+            + "PASS XLSX positive/negative tint through JNI, Canvas colors and URI preview\n"
+            + PptxNumberingChecks.run(instrumentation, activity);
     }
 
     private static void tint(OfficeInstrumentation instrumentation, PreviewTestActivity activity) throws Exception {
@@ -103,6 +104,19 @@ final class CompatibilityChecks {
             for (String[] part : parts) entry(zip, part[0], part[1]);
         }
         return source;
+    }
+
+    static File presentation(Context context, String name, String shapes) throws Exception {
+        return document(context, name, "ppt/presentation.xml", new String[][] {
+            {"ppt/presentation.xml", "<p:presentation xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\" "
+                + "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
+                + "<p:sldIdLst><p:sldId id=\"256\" r:id=\"slide\"/></p:sldIdLst>"
+                + "<p:sldSz cx=\"9144000\" cy=\"5143500\"/></p:presentation>"},
+            {"ppt/_rels/presentation.xml.rels", relationships("slide", "slide", "slides/slide.xml")},
+            {"ppt/slides/slide.xml", "<p:sld xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\" "
+                + "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\">"
+                + "<p:cSld><p:spTree>" + shapes + "</p:spTree></p:cSld></p:sld>"}
+        });
     }
 
     static String relationships(String... triples) {

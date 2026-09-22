@@ -1,5 +1,6 @@
 use super::colors::Theme;
 use super::inheritance::{level_defaults, text_style};
+use super::numbering;
 use super::text_style::{apply_autofit, TextStyle};
 use super::Budget;
 use crate::model::{Document, Paragraph, Run};
@@ -98,11 +99,12 @@ impl Text<'_> {
                                 .unwrap_or(1)
                                 .clamp(1, 32767);
                         }
-                        result.bullet = format!("{counter}. ");
+                        result.bullet = numbering::format(*counter, bullet.attr("type"))
+                            .unwrap_or_else(|| {
+                                styles.doc.warn("PPTX numbered lists use decimal numbers.");
+                                format!("{counter}. ")
+                            });
                         *counter += 1;
-                        if bullet.attr("type") != "arabicPeriod" {
-                            styles.doc.warn("PPTX numbered lists use decimal numbers.");
-                        }
                     }
                     "buBlip" => styles.doc.warn("PPTX picture bullets are omitted."),
                     _ => (),

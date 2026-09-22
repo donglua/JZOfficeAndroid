@@ -5,6 +5,7 @@ mod drawing;
 mod geometry;
 mod gradient;
 mod inheritance;
+mod numbering;
 mod parts;
 mod path;
 mod render;
