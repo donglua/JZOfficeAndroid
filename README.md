@@ -1,22 +1,22 @@
 # JZOfficeAndroid
 
-轻量级 Android Office 文档预览库，**核心 AAR 不到 1 MB**，支持 DOCX、PPTX 和 XLSX 离线预览。v0.2.0 核心 AAR 约 **777 KiB**，已包含 `arm64-v8a` 和 `armeabi-v7a` 两种架构。
+轻量级 Android Office 文档预览库，**核心 AAR 不到 1 MB**，支持 DOCX、PPTX 和 XLSX 离线预览。0.3.0 本地 Release 构建的核心 AAR 约 **782 KiB**，已包含 `arm64-v8a` 和 `armeabi-v7a` 两种架构。
 
 通过 Android `Uri` 打开文档。Rust crate `jz-office-core` 解析文档，Android `viewer` 模块负责离线显示，不依赖服务器、WebView、Office 应用或内置字体。可选 `viewer-online` 模块支持下载在线文档后预览。
 
 这是基础预览实现，不保证与 Microsoft Office 的版式一致。旧版 `.doc/.ppt/.xls`、加密文档、ZIP64/分卷容器和编辑功能不在支持范围内。
 
-当前已发布版本为 **0.2.0**，变更见 [CHANGELOG](CHANGELOG.md)。发布产物见 [v0.2.0 Release](https://github.com/donglua/JZOfficeAndroid/releases/tag/v0.2.0)，Maven Central 坐标为 [viewer](https://central.sonatype.com/artifact/io.github.donglua/viewer/0.2.0) 和 [viewer-online](https://central.sonatype.com/artifact/io.github.donglua/viewer-online/0.2.0)。发布可用性以对应仓库为准；完整设备验收尚未完成。
+当前版本为 **0.3.0**，包含 PPTX 按需排版、最近图片缓存复用和小数字号修复，变更与已知问题见 [CHANGELOG](CHANGELOG.md)。发布产物见 [v0.3.0 Release](https://github.com/donglua/JZOfficeAndroid/releases/tag/v0.3.0)，Maven Central 坐标为 [viewer](https://central.sonatype.com/artifact/io.github.donglua.office/viewer/0.3.0) 和 [viewer-online](https://central.sonatype.com/artifact/io.github.donglua.office/viewer-online/0.3.0)。发布可用性以对应仓库为准；完整设备回归仍有未通过项。
 
 ## 体积
 
-以下为 [v0.2.0 Release 附件](https://github.com/donglua/JZOfficeAndroid/releases/tag/v0.2.0)的实际文件大小，1 KiB = 1024 字节：
+以下为 0.3.0 本地 Release 构建的实际文件大小，1 KiB = 1024 字节；CI 构建的最终附件见 [v0.3.0 Release](https://github.com/donglua/JZOfficeAndroid/releases/tag/v0.3.0)：
 
 | 产物 | 文件大小 | 包含内容 |
 | --- | --- | --- |
-| `viewer-0.2.0.aar` | **约 777 KiB**（795,482 字节） | DOCX / PPTX / XLSX 核心预览，含两种 ARM 架构的原生库 |
-| `viewer-online-0.2.0.aar` | **约 18.9 KiB**（19,313 字节） | 可选的下载与缓存模块，需配合 `viewer` 使用 |
-| 两个 AAR 合计 | **约 796 KiB**（814,795 字节） | 本地与在线文档预览 |
+| `viewer-0.3.0.aar` | **约 782 KiB**（800,593 字节） | DOCX / PPTX / XLSX 核心预览，含两种 ARM 架构的原生库 |
+| `viewer-online-0.3.0.aar` | **约 18.9 KiB**（19,313 字节） | 可选的下载与缓存模块，需配合 `viewer` 使用 |
+| 两个 AAR 合计 | **约 801 KiB**（819,906 字节） | 本地与在线文档预览 |
 
 仅需本地预览时只引入 `viewer`；在线模块按需添加，不额外引入网络库。两个 AAR 均不打包字体或 Demo 样例。
 
@@ -89,7 +89,7 @@ dependencyResolutionManagement {
 
 ```kotlin
 dependencies {
-    implementation("io.github.donglua:viewer:0.2.0")
+    implementation("io.github.donglua.office:viewer:0.3.0")
 }
 ```
 
@@ -97,11 +97,11 @@ dependencies {
 
 ```kotlin
 dependencies {
-    implementation("io.github.donglua:viewer-online:0.2.0")
+    implementation("io.github.donglua.office:viewer-online:0.3.0")
 }
 ```
 
-下一版本起，两个模块的 Maven groupId 将改为 `io.github.donglua.office`，artifactId 和 Java 包名不变。升级时需同时更新 groupId 和版本号；已发布的 `0.2.0` 仍使用上面的旧坐标。
+从 `0.3.0` 起，两个模块的 Maven groupId 改为 `io.github.donglua.office`，artifactId 和 Java 包名不变。由 `0.2.0` 升级时需同时更新 groupId 和版本号；历史 `0.2.0` 仍使用 `io.github.donglua`。
 
 `viewer` AAR 默认包含 `arm64-v8a` 和 `armeabi-v7a` 原生库、R8 保留规则。接入项目不需要安装 Rust 或 NDK，`viewer-online` 不额外引入网络库，Demo 样例不进入两个 AAR。
 
@@ -114,12 +114,12 @@ dependencies {
 }
 ```
 
-直接引用 AAR 不会解析 Maven 传递依赖。发布工作流生成 `viewer-0.2.0.aar` 和 `viewer-online-0.2.0.aar` 两个 Release 附件；在线预览必须同时引入两者，本地预览只需前者：
+直接引用 AAR 不会解析 Maven 传递依赖。发布工作流生成 `viewer-0.3.0.aar` 和 `viewer-online-0.3.0.aar` 两个 Release 附件；在线预览必须同时引入两者，本地预览只需前者：
 
 ```kotlin
 dependencies {
-    implementation(files("libs/viewer-0.2.0.aar"))
-    implementation(files("libs/viewer-online-0.2.0.aar"))
+    implementation(files("libs/viewer-0.3.0.aar"))
+    implementation(files("libs/viewer-online-0.3.0.aar"))
 }
 ```
 
@@ -323,11 +323,11 @@ let document = jz_office_core::parse_path(std::path::Path::new("sample.docx"))?;
 
 ## 发布到 Sonatype Central
 
-下一版本的坐标为 `io.github.donglua.office:viewer:<version>` 和 `io.github.donglua.office:viewer-online:<version>`。两个模块使用共享 Gradle 发布配置，分别生成 release AAR、sources JAR、Javadoc JAR、POM 和 Gradle Module Metadata，上传时附带 GPG 签名。`viewer-online` 的发布依赖指向同组、同版本的 `viewer`。
+两个模块的坐标为 `io.github.donglua.office:viewer:<version>` 和 `io.github.donglua.office:viewer-online:<version>`。它们使用共享 Gradle 发布配置，分别生成 release AAR、sources JAR、Javadoc JAR、POM 和 Gradle Module Metadata，上传时附带 GPG 签名。`viewer-online` 的发布依赖指向同组、同版本的 `viewer`。
 
 ### 本地准备
 
-当前默认版本仍为 `0.2.0`，下一版本号尚未指定；正式发布前需同步更新根项目默认版本、Demo 的 `versionName` 和 Rust workspace 版本。以下命令仅在本地生成并检查新 groupId 下两个模块的发布内容：
+当前根项目默认版本、Demo 的 `versionName` 和 Rust workspace 版本统一为 `0.3.0`。以下命令仅在本地生成并检查两个模块的发布内容：
 
 ```sh
 ./gradlew :prepareRelease
@@ -336,8 +336,8 @@ let document = jz_office_core::parse_path(std::path::Path::new("sample.docx"))?;
 根任务 `:prepareRelease` 将两个模块的发布文件写入 `build/release-repository/`，检查 POM 和 Gradle 元数据坐标、模块间依赖以及 AAR 内容，不上传 Sonatype。未配置签名密钥时，本地准备会跳过签名；正式发布要求完整的 POM 信息和签名配置。默认坐标对应目录为：
 
 ```text
-build/release-repository/io/github/donglua/office/viewer/0.2.0/
-build/release-repository/io/github/donglua/office/viewer-online/0.2.0/
+build/release-repository/io/github/donglua/office/viewer/0.3.0/
+build/release-repository/io/github/donglua/office/viewer-online/0.3.0/
 ```
 
 本地准备通过不代表 Maven Central 已发布，也不替代设备验收。当前检查状态见「验证」。
@@ -396,13 +396,13 @@ signing.password=<gpg-passphrase>
 
 `SONATYPE_NAMESPACE` 未配置时使用默认值 `io.github.donglua`。发布工作流不再读取 Actions Variable `PUBLISHED_GROUP_ID`，而是使用所检出标签的 `build.gradle` 中的默认 groupId；旧标签仍保留原坐标。本地发布若曾配置 `publishedGroupId` 属性或 `PUBLISHED_GROUP_ID` 环境变量，需移除覆盖或更新为 `io.github.donglua.office`。
 
-正式发布时，基于待发布提交创建 tag，再发布 GitHub 正式 Release。0.2.0 对应标签为 `v0.2.0`；工作流去掉 `v` 前缀，将该 tag 对应的两个模块以同一版本发布。版本号必须为三段数字，不接受 `-rc`、`-beta`、`-SNAPSHOT` 等后缀。
+正式发布时，基于待发布提交创建 tag，再发布 GitHub 正式 Release。0.3.0 对应标签为 `v0.3.0`；工作流去掉 `v` 前缀，将该 tag 对应的两个模块以同一版本发布。版本号必须为三段数字，不接受 `-rc`、`-beta`、`-SNAPSHOT` 等后缀。
 
 工作流监听 `release.released`，也支持将预发布版转为正式版，但 tag 仍须符合上述格式。上传前先运行 Java 网络与缓存检查、Rust 检查和 `:prepareRelease`；随后通过根任务 `:publishToSonatype` 签名并上传两个模块，全部上传后只向 Central Portal 交接一次。Sonatype 验证通过后自动发布 Maven Central，部署状态可在 [Central Portal](https://central.sonatype.com/publishing) 查看。
 
 工作流提交 Sonatype 发布后，会将同次构建的两个 AAR 以 `viewer-<版本号>.aar` 和 `viewer-online-<版本号>.aar` 上传到对应 GitHub Release 的 Assets；Demo APK 仍需自行构建。附件上传成功不代表 Maven Central 已可解析，仍需确认 Portal 发布状态。
 
-也可以在 Actions 中手动运行 **Publish libraries to Sonatype Central**，选择包含最新工作流的 `main` 分支，输入版本号（例如 `0.2.0` 或 `v0.2.0`）。运行前需已创建对应的 `v0.2.0` 标签和 GitHub Release。手动入口固定检出该标签并发布其源码；所选工作流分支不改变发布源码。此方式可用于修复 CI 后重试尚未成功的发布，不要重用已发布到 Maven Central 的版本号。若只有附件上传失败，可直接补传 AAR，无需重新发布 Maven 版本。Release 的事件语义见 [GitHub 文档](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#release)，自动发布模式见 [Sonatype 文档](https://central.sonatype.org/publish/publish-portal-ossrh-staging-api/#post-to-manualuploaddefaultrepositorynamespace)。
+也可以在 Actions 中手动运行 **Publish libraries to Sonatype Central**，选择包含最新工作流的 `main` 分支，输入版本号（例如 `0.3.0` 或 `v0.3.0`）。运行前需已创建对应的 `v0.3.0` 标签和 GitHub Release。手动入口固定检出该标签并发布其源码；所选工作流分支不改变发布源码。此方式可用于修复 CI 后重试尚未成功的发布，不要重用已发布到 Maven Central 的版本号。若只有附件上传失败，可直接补传 AAR，无需重新发布 Maven 版本。Release 的事件语义见 [GitHub 文档](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#release)，自动发布模式见 [Sonatype 文档](https://central.sonatype.org/publish/publish-portal-ossrh-staging-api/#post-to-manualuploaddefaultrepositorynamespace)。
 
 ### 本地发布
 
@@ -416,7 +416,9 @@ signing.password=<gpg-passphrase>
 
 ## 验证
 
-0.2.0 验证记录：Debug/Release 构建、lint、47 项网络检查、缓存检查和 Rust 检查已通过。双模块本地发布产物检查已通过；独立消费项目使用 Gradle 元数据和纯 POM 均能从 `viewer-online:0.2.0` 解析出同版本的 `viewer`。正式签名和上传由发布 CI 执行，结果见 [Actions](https://github.com/donglua/JZOfficeAndroid/actions/workflows/publish-sonatype.yml)。`demo-samples` 已在 Android 真机通过，覆盖三种内置样例的打开、格式识别、翻页和截图；**在线预览及其他测试套件的完整设备验收尚未完成**。以下命令为复验入口，不表示所有设备测试均已执行。
+0.3.0 验证记录：Debug/Release 构建、Release lint、47 项网络检查、缓存检查和 Rust 检查已通过。双模块本地发布产物检查已通过；独立消费项目使用 Gradle 元数据和纯 POM 均能从新坐标的 `viewer-online:0.3.0` 解析出同版本 `viewer`。容器限制、图片、PPTX、XLSX、排版、Demo 三种样例和在线模块生命周期专项均已在 Android 真机通过。正式签名和上传由发布 CI 执行，结果见 [Actions](https://github.com/donglua/JZOfficeAndroid/actions/workflows/publish-sonatype.yml)。
+
+**完整设备回归仍有未通过项**：曾出现输入分发 ANR；进一步诊断观察到约 26 万字符的 XLSX 单元格在主线程断行计算中持续阻塞，现有缓存预算和最大行数不能避免该次计算。完整套件另有 PPTX 屏幕背景色断言失败，截图中已绘出内容，该断言问题尚未解决。以下命令为复验入口，不代表完整设备套件已通过。
 
 ```sh
 cargo test --workspace

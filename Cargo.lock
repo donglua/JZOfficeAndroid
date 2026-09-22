@@ -172,7 +172,7 @@ dependencies = [
 
 [[package]]
 name = "jz-office-android"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "jni",
  "jz-office-core",
@@ -181,7 +181,7 @@ dependencies = [
 
 [[package]]
 name = "jz-office-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "roxmltree",
  "serde",

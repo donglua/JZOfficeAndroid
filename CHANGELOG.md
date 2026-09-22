@@ -1,8 +1,33 @@
 # 更新日志
 
-## 未发布
+## 0.3.0
 
-- 将 `viewer` 和 `viewer-online` 的 Maven groupId 改为 `io.github.donglua.office`，artifactId 和 Java 包名不变。已发布的 `0.2.0` 保留原坐标；升级下一版本时需同时更新 groupId 和版本号。
+发布页面：[v0.3.0 Release](https://github.com/donglua/JZOfficeAndroid/releases/tag/v0.3.0)。
+
+### 升级说明
+
+- `viewer` 和 `viewer-online` 的 Maven groupId 改为 `io.github.donglua.office`，artifactId 和 Java 包名不变。升级时同时更新 groupId 和版本号，例如 `io.github.donglua.office:viewer-online:0.3.0`；它会依赖同组、同版本的 `viewer`。已发布的 `0.2.0` 保留原坐标。
+- Rust 文档模型与 Android 解码器同步演进，使用完整版本的 AAR，不能混用不同版本的 Java 类和原生库。
+
+### 性能与显示
+
+- PPTX 仅为可见页及前后相邻页准备文字和绘图布局，释放远处页面的布局；保留完整页面尺寸和位置，支持跳页、缩放和返回后重建。文档仍一次解析为有界模型。
+- 图片缓存保留最近使用的离屏图片，返回时复用未被淘汰的 Bitmap，减少重复解码；当前可见图片优先获得清晰度预算。全部缓存仍共用 800 万像素预算，通常最多保留 32 项。
+- 保留 PPTX 小数字号，修复紧凑章节标题意外换行及显示不完整的问题；改善 Demo PPTX 文字与背景的对比度。
+
+### 内部实现
+
+- 将 Office 容器校验集中到 Rust，减少 Android 层重复校验。
+- 将 PPTX 纯几何计算移入 Rust，Android 继续负责文字测量和 Canvas 绘制。
+- 提取与平台无关的 XLSX 行列布局，保留 Android 绘制和交互入口。
+
+### 验证范围
+
+- 新增按需排版、最近图片复用、缓存淘汰、清晰度升级和小数字号回归；图片、PPTX 与 Demo 样例已在 Android 真机通过，覆盖全部 16 页内置 PPTX。
+- `0.3.0` 候选版本的双模块本地发布、Release 构建与 lint、Rust 检查、47 项下载器检查及缓存检查已通过。独立消费项目已验证新坐标的 Gradle 元数据和纯 POM 传递依赖；容器限制、图片、PPTX、XLSX、排版、Demo 样例及在线模块生命周期专项均在真机通过。
+- 完整设备套件仍有未通过项：曾出现输入分发 ANR，诊断运行捕获到约 26 万字符的 XLSX 单元格在主线程断行计算中持续阻塞；另有 PPTX 屏幕背景色断言失败，截图中已绘出内容。这两项作为本版本已知问题保留。
+- 性能收益分别对应排版和图片请求阶段，不代表整份文档打开耗时按相同比例下降；缓存预算不包含解码中的图片和应用其他内存。
+- 仍为有限内容预览，格式、资源和在线预览限制见 [README](README.md)。正式签名和上传由发布 CI 执行，结果见 [Actions](https://github.com/donglua/JZOfficeAndroid/actions/workflows/publish-sonatype.yml)。
 
 ## 0.2.0
 
