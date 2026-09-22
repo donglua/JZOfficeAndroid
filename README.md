@@ -1,10 +1,26 @@
 # JZOfficeAndroid
 
-通过 Android `Uri` 预览 DOCX、PPTX 和 XLSX 的有限内容子集。Rust crate `jz-office-core` 解析文档，Android `viewer` 模块负责离线显示，不依赖服务器、WebView、Office 应用或内置字体。可选 `viewer-online` 模块支持下载在线文档后预览。
+轻量级 Android Office 文档预览库，**核心 AAR 不到 1 MB**，支持 DOCX、PPTX 和 XLSX 离线预览。v0.2.0 核心 AAR 约 **777 KiB**，已包含 `arm64-v8a` 和 `armeabi-v7a` 两种架构。
+
+通过 Android `Uri` 打开文档。Rust crate `jz-office-core` 解析文档，Android `viewer` 模块负责离线显示，不依赖服务器、WebView、Office 应用或内置字体。可选 `viewer-online` 模块支持下载在线文档后预览。
 
 这是基础预览实现，不保证与 Microsoft Office 的版式一致。旧版 `.doc/.ppt/.xls`、加密文档、ZIP64/分卷容器和编辑功能不在支持范围内。
 
 当前已发布版本为 **0.2.0**，变更见 [CHANGELOG](CHANGELOG.md)。发布产物见 [v0.2.0 Release](https://github.com/donglua/JZOfficeAndroid/releases/tag/v0.2.0)，Maven Central 坐标为 [viewer](https://central.sonatype.com/artifact/io.github.donglua/viewer/0.2.0) 和 [viewer-online](https://central.sonatype.com/artifact/io.github.donglua/viewer-online/0.2.0)。发布可用性以对应仓库为准；完整设备验收尚未完成。
+
+## 体积
+
+以下为 [v0.2.0 Release 附件](https://github.com/donglua/JZOfficeAndroid/releases/tag/v0.2.0)的实际文件大小，1 KiB = 1024 字节：
+
+| 产物 | 文件大小 | 包含内容 |
+| --- | --- | --- |
+| `viewer-0.2.0.aar` | **约 777 KiB**（795,482 字节） | DOCX / PPTX / XLSX 核心预览，含两种 ARM 架构的原生库 |
+| `viewer-online-0.2.0.aar` | **约 18.9 KiB**（19,313 字节） | 可选的下载与缓存模块，需配合 `viewer` 使用 |
+| 两个 AAR 合计 | **约 796 KiB**（814,795 字节） | 本地与在线文档预览 |
+
+仅需本地预览时只引入 `viewer`；在线模块按需添加，不额外引入网络库。两个 AAR 均不打包字体或 Demo 样例。
+
+以上为 AAR 压缩文件大小，不代表接入后的 APK 体积增量。实际增量受 ABI 选择、R8 优化及原生库打包方式影响，应以宿主应用构建结果为准。
 
 ## 预览
 
