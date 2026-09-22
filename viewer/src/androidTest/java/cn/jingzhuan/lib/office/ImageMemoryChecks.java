@@ -168,7 +168,7 @@ final class ImageMemoryChecks {
             return "IMAGE MEMORY CHECKS\n"
                 + "PASS 2000x2000 source pixels and 4x raster detail contrast=" + contrast + "\n"
                 + "SCREENSHOTS image-clarity-fit.png, image-clarity-zoom.png\n"
-                + "PASS 16-image document delivers UI onLoaded; visible images render and offscreen entries are evicted\n"
+                + "PASS 16-image document delivers UI onLoaded; visible images render and old entries yield to the cache budget\n"
                 + "PASS jump, drag, return and " + NAVIGATION_ROUNDS + " full passes; logical image reads=" + logicalReads
                 + ", peak cached pixels=" + peakPixels + "\n"
                 + "PASS rapid URI replacement, same-path image isolation, pending-load clear and temporary-file cleanup\n"
@@ -234,7 +234,7 @@ final class ImageMemoryChecks {
                 Snapshot state = snapshot(images());
                 lastState = "page=" + view.getCurrentPage() + ", wanted=" + state.wanted
                     + ", cached=" + state.bitmaps.keySet() + ", loading=" + state.loading;
-                if (state.loading || !state.wanted.equals(visible) || !state.bitmaps.keySet().equals(visible)) return;
+                if (state.loading || !state.wanted.equals(visible) || !state.bitmaps.keySet().containsAll(visible)) return;
                 check(view.getCurrentPage() == page, "Rendered page agrees with navigation: " + page);
                 int expected = color(page, alternate);
                 for (int y : new int[] {240, 300, 360}) for (int x : new int[] {240, 300, 360}) {

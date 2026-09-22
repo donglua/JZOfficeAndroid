@@ -92,7 +92,7 @@ final class ImageQualityChecks {
             instrumentation.runOnMainChecked(() -> {
                 if (error.get() != null) throw new AssertionError("Image decode failed", error.get());
                 State state = snapshot(images);
-                if (!images.loading && images.bitmaps.keySet().equals(parts)) {
+                if (!images.loading && images.wanted.equals(parts) && images.bitmaps.keySet().containsAll(parts)) {
                     ready.set(state);
                 }
             });

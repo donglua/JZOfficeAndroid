@@ -22,13 +22,14 @@ public final class OfficeInstrumentation extends Instrumentation {
     private PreviewTestActivity activity;
     private final StringBuilder results = new StringBuilder();
     private boolean layoutOnly, limitsOnly, imagesOnly, xlsxOnly, demoOnly, pptxOnly, pathsOnly, tablesOnly, backgroundsOnly;
-    private boolean demoSamplesOnly, sheetLayoutOnly, pptxGeometryOnly, pptxLayoutOnly;
+    private boolean demoSamplesOnly, sheetLayoutOnly, pptxGeometryOnly, pptxLayoutOnly, imageCacheOnly;
 
     @Override public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
         layoutOnly = arguments != null && "layout".equals(arguments.getString("suite"));
         limitsOnly = arguments != null && "limits".equals(arguments.getString("suite"));
         imagesOnly = arguments != null && "images".equals(arguments.getString("suite"));
+        imageCacheOnly = arguments != null && "image-cache".equals(arguments.getString("suite"));
         xlsxOnly = arguments != null && "xlsx".equals(arguments.getString("suite"));
         demoOnly = arguments != null && "demo-xlsx".equals(arguments.getString("suite"));
         demoSamplesOnly = arguments != null && "demo-samples".equals(arguments.getString("suite"));
@@ -104,7 +105,7 @@ public final class OfficeInstrumentation extends Instrumentation {
                 finish(Activity.RESULT_OK, output);
                 return;
             }
-            if (!layoutOnly && !imagesOnly && !xlsxOnly && !pptxOnly && !pptxLayoutOnly) {
+            if (!layoutOnly && !imagesOnly && !imageCacheOnly && !xlsxOnly && !pptxOnly && !pptxLayoutOnly) {
                 results.append(PackageOpeningChecks.run(getTargetContext()));
                 results.append(PackageLimitChecks.run(getTargetContext()));
             }
@@ -142,7 +143,7 @@ public final class OfficeInstrumentation extends Instrumentation {
                 finish(Activity.RESULT_OK, output);
                 return;
             }
-            if (!layoutOnly && !imagesOnly) {
+            if (!layoutOnly && !imagesOnly && !imageCacheOnly) {
                 results.append(SheetLayoutChecks.run());
                 runOnMainChecked(() -> results.append(SheetRenderingChecks.run(getTargetContext())));
                 results.append(SpreadsheetChecks.run(this, activity));
@@ -150,6 +151,13 @@ public final class OfficeInstrumentation extends Instrumentation {
             if (xlsxOnly) {
                 runOnMainSync(() -> activity.finish());
                 output.putString("stream", "\n" + results + "ALL XLSX CHECKS PASSED\n");
+                finish(Activity.RESULT_OK, output);
+                return;
+            }
+            if (!layoutOnly) results.append(ImageCacheChecks.run(this, activity));
+            if (imageCacheOnly) {
+                runOnMainSync(() -> activity.finish());
+                output.putString("stream", "\n" + results + "ALL IMAGE CACHE CHECKS PASSED\n");
                 finish(Activity.RESULT_OK, output);
                 return;
             }

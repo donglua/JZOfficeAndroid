@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
@@ -18,7 +19,8 @@ import java.util.concurrent.TimeUnit;
 /** Owns a document's image source; cache state belongs to the main thread. */
 final class OfficeImages {
     static final long MAX_PIXELS = 8_000_000;
-    final Map<String, Bitmap> bitmaps = new HashMap<>();
+    static final int MAX_CACHED_IMAGES = 32;
+    final Map<String, Bitmap> bitmaps = new LinkedHashMap<>(16, 0.75f, true);
     final Set<String> wanted = new LinkedHashSet<>();
     private final Set<String> resizePending = new LinkedHashSet<>();
     private final Map<String, Long> nextPixels = new HashMap<>();
@@ -41,15 +43,24 @@ final class OfficeImages {
             revision++;
             wanted.clear(); wanted.addAll(parts);
             long limit = pixelLimit();
-            // Published bitmaps may still be referenced by RenderThread; drop ownership without recycling them.
+            boolean fullSize = true;
+            for (String part : wanted) {
+                Bitmap bitmap = bitmaps.get(part);
+                Long next = nextPixels.get(part);
+                if (bitmap == null || next == null || next != Long.MAX_VALUE) fullSize = false;
+            }
             Iterator<Map.Entry<String, Bitmap>> entries = bitmaps.entrySet().iterator();
             while (entries.hasNext()) {
                 Map.Entry<String, Bitmap> entry = entries.next();
                 if (!wanted.contains(entry.getKey())) {
-                    nextPixels.remove(entry.getKey()); resizePending.remove(entry.getKey()); entries.remove();
-                } else if (pixels(entry.getValue()) > limit) resizePending.add(entry.getKey());
+                    resizePending.remove(entry.getKey());
+                    if (entry.getValue() == null) {
+                        nextPixels.remove(entry.getKey()); entries.remove();
+                    }
+                } else if (!fullSize && pixels(entry.getValue()) > limit) resizePending.add(entry.getKey());
                 else resizePending.remove(entry.getKey());
             }
+            trimCache();
         }
         loadNext();
     }
@@ -58,12 +69,26 @@ final class OfficeImages {
 
     private static long pixels(Bitmap bitmap) { return bitmap == null ? 0 : (long) bitmap.getWidth() * bitmap.getHeight(); }
 
+    private void trimCache() {
+        long total = 0;
+        for (Bitmap bitmap : bitmaps.values()) total += pixels(bitmap);
+        Iterator<Map.Entry<String, Bitmap>> entries = bitmaps.entrySet().iterator();
+        while (entries.hasNext() && (total > MAX_PIXELS || bitmaps.size() > MAX_CACHED_IMAGES)) {
+            Map.Entry<String, Bitmap> entry = entries.next();
+            if (wanted.contains(entry.getKey())) continue;
+            total -= pixels(entry.getValue());
+            nextPixels.remove(entry.getKey()); resizePending.remove(entry.getKey());
+            // Published bitmaps may still be referenced by RenderThread; drop ownership without recycling them.
+            entries.remove();
+        }
+    }
+
     private void loadNext() {
         if (closed || suspended || loading) return;
         String missing = null;
         long budget = pixelLimit();
         long available = MAX_PIXELS;
-        for (Bitmap bitmap : bitmaps.values()) available -= pixels(bitmap);
+        for (String part : wanted) available -= pixels(bitmaps.get(part));
         // Make room before loading new entries, while keeping each old bitmap until replacement.
         for (String part : wanted) if (resizePending.contains(part)) { missing = part; break; }
         if (missing == null) for (String part : wanted) {
@@ -104,6 +129,7 @@ final class OfficeImages {
                     if (decoded != null || !bitmaps.containsKey(part)) bitmaps.put(part, decoded);
                     resizePending.remove(part);
                     nextPixels.put(part, upgradePixels);
+                    trimCache();
                     changed.run();
                     if (failure != null) listener.onError(failure);
                 }

@@ -90,7 +90,7 @@ final class PptxCompatibilityChecks {
                 check(view.getWidth() == WIDTH && view.getHeight() == HEIGHT, "Stable 1080x800 test viewport");
                 view.draw(new Canvas());
                 OfficeImages images = (OfficeImages) field.get(view);
-                if (images == null || images.loading || !images.wanted.equals(expected) || !images.bitmaps.keySet().equals(expected)) return;
+                if (images == null || images.loading || !images.wanted.equals(expected) || !images.bitmaps.keySet().containsAll(expected)) return;
                 for (Bitmap bitmap : images.bitmaps.values()) {
                     check(bitmap != null && !bitmap.isRecycled(), "Expected image cache contains decoded pixels");
                     color(bitmap, 0, 0, TEAL, "Visible image cache holds fixture pixels");
